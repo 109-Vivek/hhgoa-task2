@@ -34,6 +34,22 @@ RRF_K = 60
 DENSE_WEIGHT = 0.65
 LEXICAL_WEIGHT = 0.35
 
+def get_bool_env(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in ("true", "1", "yes", "on")
+
+# Mock & Fallback Configuration Toggles
+FORCE_STT_MOCK = get_bool_env("FORCE_STT_MOCK", False)
+ALLOW_STT_FALLBACK = get_bool_env("ALLOW_STT_FALLBACK", True)
+
+FORCE_LLM_MOCK = get_bool_env("FORCE_LLM_MOCK", False)
+ALLOW_LLM_FALLBACK = get_bool_env("ALLOW_LLM_FALLBACK", True)
+
+FORCE_SAMPLE_CORPUS = get_bool_env("FORCE_SAMPLE_CORPUS", False)
+ALLOW_DATASET_FALLBACK = get_bool_env("ALLOW_DATASET_FALLBACK", True)
+
 # Supported Languages in MSMARCO-XI
 SUPPORTED_LANGUAGES = ["en", "hi", "ta"]
 DEFAULT_LANG = "en"

@@ -9,6 +9,8 @@ from src.config import (
     INDEX_DIR,
     SUPPORTED_LANGUAGES,
     DEFAULT_LANG,
+    FORCE_SAMPLE_CORPUS,
+    ALLOW_DATASET_FALLBACK,
 )
 from src.chunking.chunker import MultiTierChunkingEngine, ChunkingStrategy, Chunk
 from src.embeddings.bge_embedder import get_embedder, BGEEmbedder
@@ -104,8 +106,12 @@ SAMPLE_CORPUS = {
 def load_msmarco_xi_dataset(lang: str, limit: int = 500) -> List[Dict[str, Any]]:
     """
     Attempts to load passages from Hugging Face ai4bharat/MSMARCO-XI dataset.
-    Falls back gracefully to curated sample corpus if network/HF is unreachable.
+    Respects FORCE_SAMPLE_CORPUS and ALLOW_DATASET_FALLBACK environment toggles.
     """
+    if FORCE_SAMPLE_CORPUS:
+        print(f"[Indexer] FORCE_SAMPLE_CORPUS=True is active. Using curated sample corpus for '{lang}'.")
+        return SAMPLE_CORPUS.get(lang, SAMPLE_CORPUS["en"])
+
     try:
         from datasets import load_dataset
         print(f"[Indexer] Attempting to load Hugging Face dataset 'ai4bharat/MSMARCO-XI' ({lang})...")
@@ -137,9 +143,13 @@ def load_msmarco_xi_dataset(lang: str, limit: int = 500) -> List[Dict[str, Any]]
             return passages
 
     except Exception as e:
-        print(f"[Indexer] Notice: Could not load Hugging Face dataset ({e}). Using curated corpus for '{lang}'.")
+        err_msg = f"Could not load Hugging Face dataset ({e})"
+        print(f"[Indexer] {err_msg}")
+        if not ALLOW_DATASET_FALLBACK:
+            raise RuntimeError(f"[Indexer] {err_msg} and ALLOW_DATASET_FALLBACK=False")
 
     # Fallback to high-quality curated dataset
+    print(f"[Indexer] Falling back to curated sample corpus for '{lang}'.")
     return SAMPLE_CORPUS.get(lang, SAMPLE_CORPUS["en"])
 
 
@@ -163,7 +173,7 @@ def build_indices_for_language(
     embedder = embedder or get_embedder()
 
     # 1. Fetch raw data
-    if use_sample:
+    if use_sample or FORCE_SAMPLE_CORPUS:
         raw_items = SAMPLE_CORPUS.get(lang, SAMPLE_CORPUS["en"])
     else:
         raw_items = load_msmarco_xi_dataset(lang, limit=limit)

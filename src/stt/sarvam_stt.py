@@ -3,7 +3,7 @@ import time
 import requests
 from typing import Optional, Union, Dict, Any
 from dataclasses import dataclass
-from src.config import SARVAM_API_KEY
+from src.config import SARVAM_API_KEY, FORCE_STT_MOCK, ALLOW_STT_FALLBACK
 
 
 @dataclass
@@ -18,7 +18,7 @@ class TranscriptionResult:
 class SarvamSTT:
     """
     Speech-to-Text transcriber using Sarvam AI API (saaras:v2 model)
-    with support for Hindi (hi-IN), Tamil (ta-IN), Indian English (en-IN), and mock fallback.
+    with support for Hindi (hi-IN), Tamil (ta-IN), Indian English (en-IN), and configurable mock fallback.
     """
 
     SARVAM_STT_URL = "https://api.sarvam.ai/speech-to-text"
@@ -35,12 +35,18 @@ class SarvamSTT:
     ) -> TranscriptionResult:
         """
         Transcribes raw audio bytes using Sarvam STT API.
-        If API key is missing or request fails, falls back gracefully.
+        Respects FORCE_STT_MOCK and ALLOW_STT_FALLBACK environment toggles.
         """
         start_time = time.perf_counter()
 
+        if FORCE_STT_MOCK:
+            print("[Sarvam STT] FORCE_STT_MOCK=True is active, using simulated STT response")
+            return self._mock_transcription(start_time, language_code)
+
         if not self.api_key or self.api_key.startswith("your_"):
-            print("[Sarvam STT] API key missing or default, using mock/simulated STT response")
+            if not ALLOW_STT_FALLBACK:
+                raise RuntimeError("[Sarvam STT] SARVAM_API_KEY is missing and ALLOW_STT_FALLBACK=False.")
+            print("[Sarvam STT] API key missing, falling back to simulated STT response")
             return self._mock_transcription(start_time, language_code)
 
         headers = {
@@ -79,10 +85,17 @@ class SarvamSTT:
                     raw_response=res_data,
                 )
             else:
-                print(f"[Sarvam STT] Error {response.status_code}: {response.text}")
+                err_msg = f"Sarvam STT Error {response.status_code}: {response.text}"
+                print(f"[Sarvam STT] {err_msg}")
+                if not ALLOW_STT_FALLBACK:
+                    raise RuntimeError(f"[Sarvam STT] {err_msg}")
                 return self._mock_transcription(start_time, language_code)
 
         except Exception as e:
+            if not ALLOW_STT_FALLBACK and not isinstance(e, RuntimeError):
+                raise RuntimeError(f"[Sarvam STT] Live transcription failed: {e}")
+            elif not ALLOW_STT_FALLBACK and isinstance(e, RuntimeError):
+                raise e
             print(f"[Sarvam STT] Exception during transcription: {e}")
             return self._mock_transcription(start_time, language_code)
 

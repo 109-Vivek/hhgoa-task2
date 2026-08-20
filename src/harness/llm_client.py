@@ -11,12 +11,14 @@ from src.config import (
     PRIMARY_LLM_PROVIDER,
     PRIMARY_LLM_MODEL,
     FALLBACK_LLM_MODEL,
+    FORCE_LLM_MOCK,
+    ALLOW_LLM_FALLBACK,
 )
 
 
 class ResilientLLMClient:
     """
-    High-performance, multi-provider LLM client with automatic fallback,
+    High-performance, multi-provider LLM client with configurable fallback,
     retry mechanism, and deterministic offline synthesis.
     Supports Groq, xAI (Grok), OpenAI, Gemini, Sarvam, and Mock mode.
     """
@@ -47,6 +49,16 @@ class ResilientLLMClient:
             return {
                 "answer": refusal_msg,
                 "provider": "guardrail_abstention",
+                "latency_ms": elapsed_ms,
+            }
+
+        # If FORCE_LLM_MOCK is set, directly use local grounded synthesizer
+        if FORCE_LLM_MOCK:
+            fallback_answer = self._generate_extractive_grounded_answer(query, retrieved_contexts, lang)
+            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+            return {
+                "answer": fallback_answer,
+                "provider": "local_mock_harness",
                 "latency_ms": elapsed_ms,
             }
 
@@ -105,6 +117,10 @@ class ResilientLLMClient:
             if res:
                 res["latency_ms"] = (time.perf_counter() - start_time) * 1000.0
                 return res
+
+        # If live LLM calls failed and fallback is disabled, raise error
+        if not ALLOW_LLM_FALLBACK:
+            raise RuntimeError("[LLM Client] Configured live LLM providers failed and ALLOW_LLM_FALLBACK=False.")
 
         # Fast local grounded fallback (<2ms latency)
         fallback_answer = self._generate_extractive_grounded_answer(query, retrieved_contexts, lang)
