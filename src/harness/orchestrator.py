@@ -62,6 +62,7 @@ class PipelineResponse:
     latency: PipelineLatencyBreakdown
     is_abstention: bool
     provider: str
+    stt_info: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -145,12 +146,20 @@ class VoiceRAGOrchestrator:
         detected_lang = self._normalize_lang(stt_res.language_code)
 
         # Proceed with text processing
+        stt_info = {
+            "text": stt_res.text,
+            "is_mock": stt_res.is_mock,
+            "confidence": stt_res.confidence,
+            "latency_ms": stt_res.latency_ms,
+            "mode": "mock" if stt_res.is_mock else "sarvam_live",
+        }
         return self._execute_text_pipeline(
             query=query,
             lang=detected_lang,
             stt_confidence=stt_res.confidence,
             timing=timing,
             total_start=total_start,
+            stt_info=stt_info,
         )
 
     def process_query(
@@ -175,6 +184,7 @@ class VoiceRAGOrchestrator:
             stt_confidence=1.0,
             timing=timing,
             total_start=total_start,
+            stt_info=None,
         )
 
     def _execute_text_pipeline(
@@ -184,6 +194,7 @@ class VoiceRAGOrchestrator:
         stt_confidence: float,
         timing: PipelineLatencyBreakdown,
         total_start: float,
+        stt_info: Optional[Dict[str, Any]] = None,
     ) -> PipelineResponse:
         """Internal execution flow for guardrails, retrieval, LLM synthesis, and grounding."""
 
@@ -192,36 +203,34 @@ class VoiceRAGOrchestrator:
         timing.input_guardrail_ms = ig_res.latency_ms
 
         if not ig_res.is_safe:
-            refusal_ans = (
-                f"Request cannot be processed: {ig_res.reason}"
-                if ig_res.action == "block"
-                else "Could you please repeat your query more clearly?"
-            )
+            print(f"[Orchestrator] Input guardrail triggered: {ig_res.reason}")
             timing.total_end_to_end_ms = (time.perf_counter() - total_start) * 1000.0
             return PipelineResponse(
                 query=query,
                 detected_lang=lang,
-                answer=refusal_ans,
+                answer=f"Request blocked: {ig_res.reason}",
                 retrieved_documents=[],
                 input_guard=asdict(ig_res),
-                output_guard=asdict(
-                    GroundingCheckResult(
-                        is_grounded=True,
-                        grounding_score=1.0,
-                        is_abstention=True,
-                        hallucination_detected=False,
-                        reason="Input blocked by guardrail.",
-                        latency_ms=0.0,
-                    )
-                ),
+                output_guard=asdict(GroundingCheckResult(
+                    is_grounded=True,
+                    grounding_score=1.0,
+                    is_abstention=True,
+                    hallucination_detected=False,
+                    reason="Input blocked by guardrail.",
+                    latency_ms=0.0,
+                )),
                 latency=timing,
                 is_abstention=True,
                 provider="input_guardrail",
+                stt_info=stt_info,
             )
 
-        # 3. Hybrid Search
-        search_engine = self.search_engines.get(lang) or self.search_engines.get("en")
-        retrieved_raw, total_retrieval_ms, metrics = search_engine.search(
+        # 3. Dense Embedding & Hybrid Retrieval
+        engine = self.search_engines.get(lang)
+        if not engine:
+            engine = self.search_engines.get(DEFAULT_LANG)
+
+        retrieved_raw, total_retrieval_ms, metrics = engine.search(
             query=query,
             top_k=self.max_results,
             lang=lang,
@@ -234,48 +243,50 @@ class VoiceRAGOrchestrator:
         timing.fusion_ms = metrics.get("fusion_ms", 0.0)
         timing.total_retrieval_ms = total_retrieval_ms
 
-        # Map to structured docs
         retrieved_docs: List[RetrievedDocument] = []
+        passages: List[str] = []
         max_dense_score = 0.0
-        for doc in retrieved_raw:
-            d_score = float(doc.get("dense_score", 0.0))
+
+        for item in retrieved_raw:
+            d_score = float(item.get("dense_score", 0.0))
             if d_score > max_dense_score:
                 max_dense_score = d_score
-            retrieved_docs.append(
-                RetrievedDocument(
-                    chunk_id=str(doc.get("chunk_id", "")),
-                    passage_id=str(doc.get("passage_id", doc.get("doc_id", ""))),
-                    text=str(doc.get("text", "")),
-                    raw_text=str(doc.get("raw_text", doc.get("text", ""))),
-                    lang=str(doc.get("lang", lang)),
-                    rrf_score=float(doc.get("rrf_score", 0.0)),
-                    dense_score=d_score,
-                    q2q_score=float(doc.get("q2q_score", 0.0)),
-                    passage_dense_score=float(doc.get("passage_dense_score", 0.0)),
-                    lexical_score=float(doc.get("lexical_score", 0.0)),
-                    match_sources=doc.get("match_sources", []),
-                    metadata=doc.get("metadata", {}),
-                )
+            doc = RetrievedDocument(
+                chunk_id=str(item.get("chunk_id", "")),
+                passage_id=str(item.get("passage_id", item.get("doc_id", ""))),
+                text=str(item.get("text", "")),
+                raw_text=str(item.get("raw_text", item.get("text", ""))),
+                lang=str(item.get("lang", lang)),
+                rrf_score=float(item.get("rrf_score", 0.0)),
+                dense_score=d_score,
+                q2q_score=float(item.get("q2q_score", 0.0)),
+                passage_dense_score=float(item.get("passage_dense_score", 0.0)),
+                lexical_score=float(item.get("lexical_score", 0.0)),
+                match_sources=item.get("match_sources", []),
+                metadata=item.get("metadata", {}),
             )
+            retrieved_docs.append(doc)
+            passages.append(doc.text)
 
-        # 4. Abstention check based on similarity threshold
-        should_abstain = (
-            len(retrieved_docs) == 0 or max_dense_score < self.similarity_threshold
-        )
+        # Check for abstention condition
+        should_abstain = False
+        if not retrieved_docs or max_dense_score < self.similarity_threshold:
+            should_abstain = True
 
-        # 5. LLM Synthesis
-        gen_result = self.llm_client.generate_answer(
+        # 4. LLM Synthesis
+        context_dicts = [{"text": d.text, "chunk_id": d.chunk_id, "score": d.dense_score} for d in retrieved_docs]
+        llm_res = self.llm_client.generate_answer(
             query=query,
-            retrieved_contexts=[doc.to_dict() if hasattr(doc, "to_dict") else asdict(doc) for doc in retrieved_docs],
+            retrieved_contexts=context_dicts,
             lang=lang,
             is_abstention=should_abstain,
         )
-        timing.llm_generation_ms = gen_result.get("latency_ms", 0.0)
-        answer = gen_result.get("answer", "")
-        provider = gen_result.get("provider", "unknown")
 
-        # 6. Output Guardrail (Grounding & Hallucination Check)
-        passages = [d.raw_text for d in retrieved_docs]
+        timing.llm_generation_ms = llm_res.get("latency_ms", 0.0)
+        answer = llm_res.get("answer", "")
+        provider = llm_res.get("provider", "unknown")
+
+        # 5. Output Guardrail (Grounding & Safety Verification)
         og_res = self.output_guard.evaluate(
             answer=answer,
             retrieved_passages=passages,
@@ -296,6 +307,7 @@ class VoiceRAGOrchestrator:
             latency=timing,
             is_abstention=og_res.is_abstention or should_abstain,
             provider=provider,
+            stt_info=stt_info,
         )
 
     @staticmethod
