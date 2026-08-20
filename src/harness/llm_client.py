@@ -82,14 +82,16 @@ class ResilientLLMClient:
 
         user_prompt = f"Retrieved Context:\n{context_str}\n\nUser Question: {query}\n\nAnswer:"
 
-        # Try Providers in priority order:
-        # 1. Groq (if valid groq key, gsk_...)
-        # 2. xAI (if key starts with xai-...)
-        # 3. Gemini
-        # 4. OpenAI
-        # 5. Local grounded extractive fallback
+        # Try Providers in order, respecting PRIMARY_LLM_PROVIDER first
+        provider_attempts = []
+        if PRIMARY_LLM_PROVIDER == "gemini":
+            provider_attempts = ["gemini", "groq", "openai"]
+        elif PRIMARY_LLM_PROVIDER == "openai":
+            provider_attempts = ["openai", "gemini", "groq"]
+        else:
+            provider_attempts = ["groq", "gemini", "openai"]
 
-        # Try xAI Grok if key starts with xai-
+        # If xAI key is provided, prioritize it
         if "xai" not in self.disabled_providers and (self.groq_key.startswith("xai-") or self.gemini_key.startswith("xai-")):
             xai_key = self.groq_key if self.groq_key.startswith("xai-") else self.gemini_key
             res = self._call_xai(xai_key, system_prompt, user_prompt)
@@ -97,26 +99,27 @@ class ResilientLLMClient:
                 res["latency_ms"] = (time.perf_counter() - start_time) * 1000.0
                 return res
 
-        # Try Groq
-        if "groq" not in self.disabled_providers and self.groq_key and self.groq_key.startswith("gsk_"):
-            res = self._call_groq(system_prompt, user_prompt)
-            if res:
-                res["latency_ms"] = (time.perf_counter() - start_time) * 1000.0
-                return res
+        for provider in provider_attempts:
+            if provider == "gemini" and "gemini" not in self.disabled_providers:
+                if self.gemini_key and not self.gemini_key.startswith("xai-") and not self.gemini_key.startswith("your_"):
+                    res = self._call_gemini(system_prompt, user_prompt)
+                    if res:
+                        res["latency_ms"] = (time.perf_counter() - start_time) * 1000.0
+                        return res
 
-        # Try Gemini
-        if "gemini" not in self.disabled_providers and self.gemini_key and not self.gemini_key.startswith("xai-") and not self.gemini_key.startswith("your_"):
-            res = self._call_gemini(system_prompt, user_prompt)
-            if res:
-                res["latency_ms"] = (time.perf_counter() - start_time) * 1000.0
-                return res
+            elif provider == "groq" and "groq" not in self.disabled_providers:
+                if self.groq_key and self.groq_key.startswith("gsk_"):
+                    res = self._call_groq(system_prompt, user_prompt)
+                    if res:
+                        res["latency_ms"] = (time.perf_counter() - start_time) * 1000.0
+                        return res
 
-        # Try OpenAI
-        if "openai" not in self.disabled_providers and self.openai_key and not self.openai_key.startswith("your_"):
-            res = self._call_openai(system_prompt, user_prompt)
-            if res:
-                res["latency_ms"] = (time.perf_counter() - start_time) * 1000.0
-                return res
+            elif provider == "openai" and "openai" not in self.disabled_providers:
+                if self.openai_key and not self.openai_key.startswith("your_"):
+                    res = self._call_openai(system_prompt, user_prompt)
+                    if res:
+                        res["latency_ms"] = (time.perf_counter() - start_time) * 1000.0
+                        return res
 
         # If live LLM calls failed and fallback is disabled, raise error
         if not ALLOW_LLM_FALLBACK:
@@ -194,14 +197,30 @@ class ResilientLLMClient:
             from google import genai
             client = genai.Client(api_key=self.gemini_key)
             full_prompt = f"{system_prompt}\n\n{user_prompt}"
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=full_prompt,
-            )
-            return {
-                "answer": response.text.strip(),
-                "provider": "gemini",
-            }
+
+            models_to_try = []
+            if PRIMARY_LLM_PROVIDER == "gemini" and PRIMARY_LLM_MODEL.startswith("gemini"):
+                models_to_try.append(PRIMARY_LLM_MODEL)
+            models_to_try.extend(["gemini-3.6-flash", "gemini-3-flash"])
+            # Remove duplicates while preserving order
+            models_to_try = list(dict.fromkeys(models_to_try))
+
+            for model_name in models_to_try:
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=full_prompt,
+                    )
+                    if response and response.text:
+                        return {
+                            "answer": response.text.strip(),
+                            "provider": f"gemini ({model_name})",
+                        }
+                except Exception as model_err:
+                    print(f"[LLM Client] Gemini model {model_name} error: {model_err}")
+                    continue
+
+            return None
         except Exception as e:
             print(f"[LLM Client] Gemini attempt failed: {e}")
             return None

@@ -135,10 +135,13 @@ async def handle_audio_query(
             filename=file.filename or "recording.wav",
             language_code=stt_lang,
         )
+        stt_mode = res.stt_info.get("mode", "unknown") if res.stt_info else "n/a"
+        stt_text = res.query
+        print(f"[Server] 🎯 Audio query processed | STT Mode: {stt_mode} | Transcribed: \"{stt_text}\" | Total Latency: {res.latency.total_end_to_end_ms:.1f}ms")
         return res.to_dict()
 
     except Exception as e:
-        print(f"[Server] Audio processing error: {e}")
+        print(f"[Server] ❌ Audio processing error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
