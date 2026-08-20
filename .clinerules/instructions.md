@@ -1,0 +1,4 @@
+- This file will serve as additional context for the LLM about this project.
+- Keep docuemnting major design decision, quick setup instructions in this file 
+- Keep it updated as we move ahead in this project -
+- task.md is the project we need to make as part of task for hackathon 
