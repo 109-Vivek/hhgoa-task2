@@ -1,7 +1,7 @@
 # Technical Specifications & System Architecture: Voice-Enabled Indic RAG
 
 ## 1. Project Overview & Objectives
-This project is a high-performance, voice-enabled Retrieval-Augmented Generation (RAG) system built for the **HH Goa 2026 Hackathon (Task 2)**. The system enables users to speak queries in **English, Hindi, and Tamil**, accurately transcribes speech using Sarvam STT, performs hybrid sub-millisecond retrieval on the **MSMARCO-XI** dataset, and synthesizes grounded answers with strict guardrails and harness orchestration under a rigorous latency budget (<200ms pipeline target).
+This project is a high-performance, voice-enabled Retrieval-Augmented Generation (RAG) system built for the **HH Goa 2026 Hackathon (Task 2)**. The system enables users to speak queries in **Gujarati, Hindi, and Telugu** (`gu`, `hi`, `te`), accurately transcribes speech using Sarvam STT, performs hybrid sub-millisecond retrieval on the **MSMARCO-XI** dataset, and synthesizes grounded answers with strict guardrails and harness orchestration under a rigorous latency budget (<200ms pipeline target).
 
 ---
 
@@ -12,7 +12,7 @@ This project is a high-performance, voice-enabled Retrieval-Augmented Generation
                │
                ▼
    ┌───────────────────────┐
-   │   Sarvam AI STT API   │  <-- Multi-Indic Speech-to-Text (en, hi, ta)
+   │   Sarvam AI STT API   │  <-- Multi-Indic Speech-to-Text (gu, hi, te)
    └───────────┬───────────┘
                │ (Transcribed Query & Detected Lang)
                ▼
@@ -38,7 +38,7 @@ This project is a high-performance, voice-enabled Retrieval-Augmented Generation
         └─────────────┬─────────────┘
                       ▼
         ┌───────────────────────────┐
-        │  Ultra-Fast LLM Generator │ <-- Groq / Sarvam / Cerebras (JSON/Pydantic)
+        │  Ultra-Fast LLM Generator │ <-- Groq / Gemini / OpenAI (JSON/Pydantic)
         └─────────────┬─────────────┘
                       ▼
         ┌───────────────────────────┐
@@ -54,8 +54,8 @@ This project is a high-performance, voice-enabled Retrieval-Augmented Generation
 
 ### 3.1. Dataset: MSMARCO-XI
 - **Source**: `ai4bharat/MSMARCO-XI` (Hugging Face).
-- **Supported Languages**: English (`en`), Hindi (`hi`), Tamil (`ta`).
-- **Streaming & Indexing**: Uses Hugging Face `datasets` streaming mode to process passages and queries without exhausting local disk memory.
+- **Supported Languages**: Gujarati (`gu`), Hindi (`hi`), Telugu (`te`), and other Indic languages.
+- **Direct Parquet Batch Loader**: Uses Hugging Face Hub downloads and PyArrow RecordBatch iteration to extract nested passages and queries robustly and incrementally.
 - **Data Schema**:
   - `query_id`: Unique query identifier.
   - `passage_id`: Unique passage identifier.

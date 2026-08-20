@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import argparse
 import time
 from pathlib import Path
@@ -111,79 +112,165 @@ SAMPLE_CORPUS = {
 
 def load_msmarco_xi_dataset(lang: str, limit: int = 500) -> List[Dict[str, Any]]:
     """
-    Loads passages from Hugging Face ai4bharat/MSMARCO-XI dataset via streaming mode.
-    Streams only the needed samples per language without downloading the entire 55GB dataset to disk.
-    Respects FORCE_SAMPLE_CORPUS and ALLOW_DATASET_FALLBACK environment toggles.
+    Load language-specific samples from ai4bharat/MSMARCO-XI.
+
+    Uses huggingface_hub to download the per-language parquet file and
+    pyarrow's iter_batches() to read it. This avoids the
+    ArrowNotImplementedError ("Nested data conversions not implemented
+    for chunked array outputs") that occurs with pyarrow >= 15 when
+    streaming nested struct columns via the ``datasets`` library.
     """
     if FORCE_SAMPLE_CORPUS:
-        print(f"[Indexer] FORCE_SAMPLE_CORPUS=True is active. Using curated sample corpus for '{lang}'.")
-        return SAMPLE_CORPUS.get(lang, SAMPLE_CORPUS["hi"])
+        raise RuntimeError(
+            "FORCE_SAMPLE_CORPUS=True, but fallback/sample mode is disabled. "
+            "Unset FORCE_SAMPLE_CORPUS to use MSMARCO-XI."
+        )
+
+    # Map ISO 639-1 codes to the filename prefixes used in the repo.
+    LANG_TO_FILE_PREFIX = {
+        "gu": "guj",
+        "hi": "hin",
+        "te": "tel",
+        "bn": "ben",
+        "kn": "kan",
+        "ml": "mal",
+        "mr": "mar",
+        "ne": "nep",
+        "or": "ori",
+        "pa": "pan",
+        "ta": "tam",
+        "ur": "urd",
+        "as": "asm",
+        "sa": "san",
+    }
+
+    prefix = LANG_TO_FILE_PREFIX.get(lang)
+    if not prefix:
+        raise RuntimeError(
+            f"[Indexer] No MSMARCO-XI parquet mapping for language '{lang}'. "
+            f"Supported: {', '.join(sorted(LANG_TO_FILE_PREFIX))}"
+        )
+
+    parquet_filename = f"train/{prefix}train.parquet"
 
     try:
-        from datasets import load_dataset
-        print(f"[Indexer] Streaming live samples from Hugging Face dataset 'ai4bharat/MSMARCO-XI' for '{lang}' (limit: {limit})...")
-        
-        # Attempt loading dataset in streaming mode
-        try:
-            dataset = load_dataset(
-                "ai4bharat/MSMARCO-XI",
-                split="train",
-                streaming=True,
-            )
-        except Exception:
-            dataset = load_dataset(
-                "ai4bharat/MSMARCO-XI",
-                "default",
-                split="train",
-                streaming=True,
-            )
-        
-        passages = []
-        collected = 0
-        
-        for item in dataset:
-            if collected >= limit:
+        from huggingface_hub import hf_hub_download
+        import pyarrow.parquet as pq
+
+        print(
+            f"[Indexer] Loading Hugging Face dataset "
+            f"'ai4bharat/MSMARCO-XI' file '{parquet_filename}' "
+            f"for '{lang}' (limit: {limit})...",
+            flush=True,
+        )
+
+        # Download (or use cached) language-specific parquet file
+        local_path = hf_hub_download(
+            repo_id="ai4bharat/MSMARCO-XI",
+            filename=parquet_filename,
+            repo_type="dataset",
+        )
+
+        # Read using iter_batches to get RecordBatch objects (plain
+        # arrays, not chunked), which avoids the pyarrow nested-struct
+        # chunked-array conversion bug.
+        pf = pq.ParquetFile(local_path)
+
+        passages: List[Dict[str, Any]] = []
+        scanned_count = 0
+
+        for batch in pf.iter_batches(batch_size=500):
+            if len(passages) >= limit:
                 break
 
-            item_lang = str(item.get("lang") or item.get("language") or "").lower()
-            p_text = str(item.get("passage") or item.get("text") or item.get("passage_text") or "").strip()
-            query = str(item.get("query") or item.get("query_text") or "").strip()
-            p_id = str(item.get("passage_id") or item.get("id") or f"{lang}_{collected}")
+            # Convert batch to list of dicts
+            batch_rows = batch.to_pylist()
 
-            # Match language by field or script inspection
-            is_match = False
-            if item_lang and (item_lang == lang or item_lang.startswith(lang)):
-                is_match = True
-            elif not item_lang:
-                # Script-based detection
-                if lang == "gu" and any('\u0A80' <= ch <= '\u0AFF' for ch in p_text):
-                    is_match = True
-                elif lang == "hi" and any('\u0900' <= ch <= '\u097F' for ch in p_text):
-                    is_match = True
-                elif lang == "te" and any('\u0C00' <= ch <= '\u0C7F' for ch in p_text):
-                    is_match = True
+            for item in batch_rows:
+                scanned_count += 1
+                if len(passages) >= limit:
+                    break
 
-            if is_match and p_text:
-                passages.append({
-                    "passage_id": p_id,
-                    "passage": p_text,
-                    "query": query,
-                })
-                collected += 1
+                query = str(item.get("query") or "").strip()
 
-        if passages:
-            print(f"[Indexer] Successfully streamed {len(passages)} passages from Hugging Face MSMARCO-XI for '{lang}'.")
-            return passages
+                # MSMARCO-XI stores passages as a nested structure.
+                passage_data = item.get("passages")
+
+                if not passage_data:
+                    continue
+
+                translated_passages = passage_data.get(
+                    "Translated_passages", []
+                )
+                selected = passage_data.get("is_selected", [])
+
+                if not translated_passages:
+                    continue
+
+                # Prefer selected passages, otherwise use all.
+                selected_passages = []
+
+                if selected and len(selected) == len(translated_passages):
+                    selected_passages = [
+                        text
+                        for text, flag in zip(translated_passages, selected)
+                        if flag and text
+                    ]
+
+                if not selected_passages:
+                    selected_passages = [
+                        text for text in translated_passages if text
+                    ]
+
+                for passage_idx, passage_text in enumerate(
+                    selected_passages
+                ):
+                    if len(passages) >= limit:
+                        break
+
+                    passage_text = str(passage_text).strip()
+
+                    if not passage_text:
+                        continue
+
+                    query_id = item.get("query_id", len(passages))
+
+                    passages.append(
+                        {
+                            "passage_id": f"{lang}_{query_id}_{passage_idx}",
+                            "passage": passage_text,
+                            "query": query,
+                        }
+                    )
+
+                    if len(passages) % 50 == 0 or len(passages) == limit:
+                        print(
+                            f"  [Dataset Loader] Loaded {len(passages)}/{limit} "
+                            f"passages for '{lang}' "
+                            f"(scanned {scanned_count} records)...",
+                            flush=True,
+                        )
+
+        if not passages:
+            raise RuntimeError(
+                f"No usable passages found in MSMARCO-XI "
+                f"for language '{lang}'."
+            )
+
+        print(
+            f"[Indexer] Successfully loaded {len(passages)} "
+            f"passages for '{lang}'.",
+            flush=True,
+        )
+
+        return passages
 
     except Exception as e:
-        err_msg = f"Could not load Hugging Face dataset ({e})"
-        print(f"[Indexer] {err_msg}")
-        if not ALLOW_DATASET_FALLBACK:
-            raise RuntimeError(f"[Indexer] {err_msg} and ALLOW_DATASET_FALLBACK=False")
-
-    # Fallback to high-quality curated dataset
-    print(f"[Indexer] Falling back to curated sample corpus for '{lang}'.")
-    return SAMPLE_CORPUS.get(lang, SAMPLE_CORPUS["hi"])
+        # NO FALLBACK.
+        raise RuntimeError(
+            f"[Indexer] Failed to load MSMARCO-XI "
+            f"for language '{lang}': {e}"
+        ) from e
 
 
 # Hardcoded Default Indexing Parameters
@@ -258,10 +345,12 @@ def build_indices_for_language(
 
     # 1. Fetch raw data from stream (excluding already indexed IDs)
     remaining_needed = limit - processed_count
-    if use_sample or FORCE_SAMPLE_CORPUS:
-        raw_items = SAMPLE_CORPUS.get(lang, SAMPLE_CORPUS["en"])
-    else:
-        raw_items = load_msmarco_xi_dataset(lang, limit=limit)
+    if use_sample:
+        raise RuntimeError(
+            "--use-sample is disabled. This indexer must use MSMARCO-XI."
+        )
+
+    raw_items = load_msmarco_xi_dataset(lang, limit=remaining_needed)
 
     # Filter out already indexed items
     new_items = [item for item in raw_items if str(item.get("passage_id", item.get("id", ""))) not in indexed_ids]
@@ -270,13 +359,16 @@ def build_indices_for_language(
         print(f"[Indexer] All available items ({processed_count}) already indexed for '{lang}'.")
         return
 
-    print(f"[Indexer] Processing {len(new_items)} new passages for language '{lang}'...")
+    total_batches = (len(new_items) + INDEX_BATCH_SIZE - 1) // INDEX_BATCH_SIZE
+    print(f"[Indexer] Processing {len(new_items)} new passages for language '{lang}' in {total_batches} batches (batch_size={INDEX_BATCH_SIZE})...", flush=True)
 
     # Process in incremental batches
-    for batch_start in range(0, len(new_items), INDEX_BATCH_SIZE):
+    for batch_idx, batch_start in enumerate(range(0, len(new_items), INDEX_BATCH_SIZE), start=1):
         batch = new_items[batch_start : batch_start + INDEX_BATCH_SIZE]
+        print(f"\n--- [Batch {batch_idx}/{total_batches}] Processing {len(batch)} items for '{lang}' ---", flush=True)
         
         # 2. Chunking
+        start_chunk = time.perf_counter()
         batch_chunks: List[Chunk] = []
         for item in batch:
             chunks = chunker.chunk_passage(
@@ -287,8 +379,11 @@ def build_indices_for_language(
                 strategy=strategy,
             )
             batch_chunks.extend(chunks)
+        chunk_duration = (time.perf_counter() - start_chunk) * 1000.0
+        print(f"  [1/5 Chunking] Created {len(batch_chunks)} chunks ({chunk_duration:.1f}ms)", flush=True)
 
         if not batch_chunks:
+            print("  [Notice] No chunks generated for this batch, skipping.", flush=True)
             continue
 
         # 3. Dense Embedding (Passages)
@@ -310,8 +405,10 @@ def build_indices_for_language(
             for c in batch_chunks
         ]
         dense_index.add(embeddings, metadata_list)
+        print(f"  [2/5 Dense Embeddings] Encoded & added {len(texts_to_embed)} vectors ({embed_duration:.1f}ms, total in index: {dense_index.count()})", flush=True)
 
         # 4. Query-Anchor Dense Indexing (Dual-Track)
+        start_qa = time.perf_counter()
         query_anchors = chunker.extract_query_anchors(batch, lang=lang)
         if query_anchors:
             queries_to_embed = [qa.query for qa in query_anchors]
@@ -329,10 +426,17 @@ def build_indices_for_language(
                 for qa in query_anchors
             ]
             query_dense_index.add(query_embeddings, query_metadata_list)
+            qa_duration = (time.perf_counter() - start_qa) * 1000.0
+            print(f"  [3/5 Query Anchors] Encoded & added {len(queries_to_embed)} query anchors ({qa_duration:.1f}ms, total query index: {query_dense_index.count()})", flush=True)
+        else:
+            print(f"  [3/5 Query Anchors] No query anchors present in this batch", flush=True)
 
         # 5. BM25 Re-indexing with updated corpus
+        start_bm25 = time.perf_counter()
         all_passage_texts = [doc.get("text", "") for doc in dense_index.metadata_store]
         bm25_index.index_documents(all_passage_texts, dense_index.metadata_store)
+        bm25_duration = (time.perf_counter() - start_bm25) * 1000.0
+        print(f"  [4/5 BM25 Sparse] Re-indexed {len(all_passage_texts)} documents ({bm25_duration:.1f}ms)", flush=True)
 
         # Update checkpoint tracking
         for item in batch:
@@ -341,9 +445,9 @@ def build_indices_for_language(
                 indexed_ids.add(p_id)
 
         current_total = len(dense_index.metadata_store)
-        print(f"[Indexer] Batch indexed: {current_total}/{limit} passages processed for '{lang}'.")
 
         # 6. Save intermediate progress to disk
+        start_save = time.perf_counter()
         dense_index.save(target_dir, index_name="faiss.index", meta_name="faiss_meta.json")
         if query_dense_index.count() > 0:
             query_dense_index.save(target_dir, index_name="query_faiss.index", meta_name="query_faiss_meta.json")
@@ -360,8 +464,10 @@ def build_indices_for_language(
                 "indexed_ids": list(indexed_ids),
             },
         )
+        save_duration = (time.perf_counter() - start_save) * 1000.0
+        print(f"  [5/5 Checkpoint & Disk Save] Saved indices to {target_dir} ({save_duration:.1f}ms) -> [{current_total}/{limit} total]", flush=True)
 
-    print(f"[Indexer] [SUCCESS] Completed indexing {dense_index.count()} passages & {query_dense_index.count()} query anchors for '{lang}'.\n")
+    print(f"\n[Indexer] [SUCCESS] Completed indexing {dense_index.count()} passages & {query_dense_index.count()} query anchors for '{lang}'.\n", flush=True)
 
 
 def build_all_indices(

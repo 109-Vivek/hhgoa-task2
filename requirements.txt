@@ -8,6 +8,7 @@ torch>=2.0.0
 sentence-transformers>=2.2.2
 datasets>=2.14.0
 huggingface-hub>=0.16.0
+pyarrow>=18.0.0,<25.0.0
 
 # Vector & Lexical Indexing
 faiss-cpu>=1.7.4
