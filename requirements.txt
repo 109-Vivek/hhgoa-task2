@@ -24,11 +24,10 @@ openai>=1.0.0
 indic-nlp-library>=0.91
 nltk>=3.8.1
 
-# Web App & UI
-streamlit>=1.30.0
+# Web API
 fastapi>=0.104.0
 uvicorn>=0.24.0
-audio-recorder-streamlit>=0.0.8
+python-multipart>=0.0.6
 
 # Benchmarking & Utilities
 tqdm>=4.66.0

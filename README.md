@@ -10,37 +10,39 @@ This repository contains a **voice‑enabled Retrieval‑Augmented Generation (R
 * **LLM Generation** – Free or trial multi‑lingual models (Groq LLaMA‑3, Gemini, OpenAI)
 * **Guardrails** – Input & output safety checks, abstention on low‑relevance
 * **Latency** – Target <200 ms end‑to‑end, with P50/P70/P100 analytics
-* **Deployment** – FastAPI + Streamlit demo, Docker‑ready
+* **Deployment** – FastAPI + React frontend, Docker‑ready
 
-## Quick Start
+# Quick Start
 
 ```bash
 # 1. Clone the repo
 git clone https://github.com/your-org/hhgoa.git
 cd hhgoa
 
-# 2. Create a virtual environment
+# 2. Set up Python environment
 python3 -m venv .venv
 source .venv/bin/activate
-
-# 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Set up environment variables
+# 3. Configure environment variables
 cp .env.example .env
 # Edit .env with your SARVAM_API_KEY, GROQ_API_KEY, etc.
 
-# 5. Build indices (English, Hindi, Tamil)
+# 4. Build indices (English, Hindi, Tamil)
 python -m src.indexer --languages en hi ta
 
-# 6. Run the benchmark harness
-python -m src.benchmark --num-queries 100
+# 5. Start the FastAPI backend
+uvicorn src.server:app --host 0.0.0.0 --port 8000 --reload
 
-# 7. Launch the demo
-python -m src.app
+# 6. In a new terminal, start the React frontend
+cd frontend
+npm install
+npm run dev
 ```
 
-The demo will expose a Streamlit UI where you can upload an audio file or record from the microphone.
+The demo will expose a React UI (http://localhost:5173) where you can upload an audio file or record from the microphone.
+
+
 
 ## Project Structure
 
@@ -76,7 +78,7 @@ hhgoa/
 │   │   └── orchestrator.py
 │   ├── benchmark.py
 │   ├── indexer.py
-│   └── app.py
+│   └── server.py
 └── tests/
     └── test_pipeline.py
 ```
