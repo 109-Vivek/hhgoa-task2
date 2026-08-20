@@ -85,15 +85,23 @@ async def startup_event():
 @app.get("/api/status")
 async def get_status():
     orch = get_orchestrator()
-    counts = {}
+    passage_counts = {}
+    query_anchor_counts = {}
     for lang in SUPPORTED_LANGUAGES:
         engine = orch.search_engines.get(lang)
-        counts[lang] = engine.dense_index.count() if engine and engine.dense_index else 0
+        passage_counts[lang] = engine.dense_index.count() if engine and engine.dense_index else 0
+        query_anchor_counts[lang] = (
+            engine.query_dense_index.count()
+            if engine and engine.query_dense_index
+            else 0
+        )
 
     return {
         "status": "online",
         "supported_languages": SUPPORTED_LANGUAGES,
-        "indexed_doc_counts": counts,
+        "indexed_doc_counts": passage_counts,
+        "indexed_query_anchor_counts": query_anchor_counts,
+        "retrieval_strategy": "dual_track_query_passage_hybrid",
         "embedding_model": EMBEDDING_MODEL_NAME,
         "llm_provider": PRIMARY_LLM_PROVIDER,
         "llm_model": PRIMARY_LLM_MODEL,
@@ -122,9 +130,9 @@ async def handle_audio_query(
             raise HTTPException(status_code=400, detail="Empty audio payload received.")
 
         lang_code_map = {
-            "en": "en-IN",
+            "gu": "gu-IN",
             "hi": "hi-IN",
-            "ta": "ta-IN",
+            "te": "te-IN",
             "auto": "hi-IN",
         }
         stt_lang = lang_code_map.get(language, "hi-IN")
@@ -163,7 +171,7 @@ async def handle_reindex(req: ReindexRequest):
 
 
 @app.get("/api/benchmark")
-async def handle_benchmark(num_queries: int = 15, languages: str = "en,hi,ta"):
+async def handle_benchmark(num_queries: int = 15, languages: str = "gu,hi,te"):
     lang_list = [l.strip() for l in languages.split(",") if l.strip()]
     results = run_benchmark(num_queries=num_queries, languages=lang_list)
     return results

@@ -421,10 +421,10 @@ export const App: React.FC = () => {
                 <Globe size={14} /> Auto-Detect
               </button>
               <button
-                className={`lang-pill ${selectedLang === 'en' ? 'active' : ''}`}
-                onClick={() => setSelectedLang('en')}
+                className={`lang-pill ${selectedLang === 'gu' ? 'active' : ''}`}
+                onClick={() => setSelectedLang('gu')}
               >
-                🇬🇧 English
+                🇮🇳 ગુજરાતી (Gujarati)
               </button>
               <button
                 className={`lang-pill ${selectedLang === 'hi' ? 'active' : ''}`}
@@ -433,10 +433,10 @@ export const App: React.FC = () => {
                 🇮🇳 हिन्दी (Hindi)
               </button>
               <button
-                className={`lang-pill ${selectedLang === 'ta' ? 'active' : ''}`}
-                onClick={() => setSelectedLang('ta')}
+                className={`lang-pill ${selectedLang === 'te' ? 'active' : ''}`}
+                onClick={() => setSelectedLang('te')}
               >
-                🇮🇳 தமிழ் (Tamil)
+                🇮🇳 తెలుగు (Telugu)
               </button>
 
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
@@ -471,7 +471,7 @@ export const App: React.FC = () => {
                   {isRecording ? `Recording... (${recordingDuration}s)` : 'Click to Speak (Sarvam AI STT)'}
                 </h3>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  {isRecording ? 'Click the red button to stop and synthesize response' : 'Speak clearly in English, Hindi, or Tamil'}
+                  {isRecording ? 'Click the red button to stop and synthesize response' : 'Speak clearly in Gujarati, Hindi, or Telugu'}
                 </p>
                 <canvas ref={canvasRef} className="waveform-canvas" width={400} height={60} />
 
@@ -499,7 +499,7 @@ export const App: React.FC = () => {
               <input
                 type="text"
                 className="text-input-field"
-                placeholder="Ask anything in English, Hindi, or Tamil..."
+                placeholder="Ask anything in Gujarati, Hindi, or Telugu..."
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
                 onKeyDown={(e) => {
@@ -738,7 +738,7 @@ export const App: React.FC = () => {
               <div>
                 <h2 style={{ fontSize: '1.5rem', marginBottom: 4 }}>📈 Pipeline Latency Benchmark Harness</h2>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem' }}>
-                  Evaluates P50 / P70 / P90 / P100 latency percentiles across English, Hindi, and Tamil test queries.
+                  Evaluates P50 / P70 / P90 / P100 latency percentiles across Gujarati, Hindi, and Telugu test queries.
                 </p>
               </div>
 
@@ -870,9 +870,14 @@ export const App: React.FC = () => {
                 <div className="metric-sub">Devanagari Tokenization</div>
               </div>
               <div className="metric-box">
-                <div className="metric-title">🇮🇳 Tamil Index (ta)</div>
-                <div className="metric-val">{systemStatus?.indexed_doc_counts?.ta ?? 5} docs</div>
-                <div className="metric-sub">Tamil Script Tokenization</div>
+                <div className="metric-title">🇮🇳 Gujarati Index (gu)</div>
+                <div className="metric-val">{systemStatus?.indexed_doc_counts?.gu ?? 5} docs</div>
+                <div className="metric-sub">Gujarati Script Tokenization</div>
+              </div>
+              <div className="metric-box">
+                <div className="metric-title">🇮🇳 Telugu Index (te)</div>
+                <div className="metric-val">{systemStatus?.indexed_doc_counts?.te ?? 5} docs</div>
+                <div className="metric-sub">Telugu Script Tokenization</div>
               </div>
             </div>
 
@@ -895,10 +900,10 @@ export const App: React.FC = () => {
                       borderRadius: 8,
                     }}
                   >
-                    <option value="all">All Languages (en, hi, ta)</option>
-                    <option value="en">English (en)</option>
+                    <option value="all">All Languages (gu, hi, te)</option>
+                    <option value="gu">Gujarati (gu)</option>
                     <option value="hi">Hindi (hi)</option>
-                    <option value="ta">Tamil (ta)</option>
+                    <option value="te">Telugu (te)</option>
                   </select>
                 </div>
 
@@ -954,7 +959,7 @@ export const App: React.FC = () => {
 
             <h3 style={{ fontSize: '1.2rem', color: 'var(--accent-saffron)', marginTop: 20 }}>1. Speech-to-Text (STT)</h3>
             <p style={{ color: 'var(--text-secondary)' }}>
-              Integrated with <strong>Sarvam AI (saaras:v2)</strong> for native Hindi, Tamil, and Indian English speech recognition with code-mixing (Hinglish/Tanglish) support.
+              Integrated with <strong>Sarvam AI (saaras:v2)</strong> for native Gujarati, Hindi, and Telugu speech recognition with code-mixing support.
             </p>
 
             <h3 style={{ fontSize: '1.2rem', color: 'var(--accent-cyan)', marginTop: 20 }}>2. Multi-Tier Chunking Taxonomy</h3>

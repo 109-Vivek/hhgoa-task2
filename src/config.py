@@ -30,9 +30,10 @@ FALLBACK_LLM_MODEL = os.getenv("FALLBACK_LLM_MODEL", "llama-3.1-8b-instant")
 # Retrieval & Guardrail Thresholds
 MAX_RETRIEVAL_RESULTS = int(os.getenv("MAX_RETRIEVAL_RESULTS", "5"))
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.35"))
-RRF_K = 60
-DENSE_WEIGHT = 0.65
-LEXICAL_WEIGHT = 0.35
+RRF_K = int(os.getenv("RRF_K", "60"))
+QUERY_ANCHOR_WEIGHT = float(os.getenv("QUERY_ANCHOR_WEIGHT", "0.40"))
+DENSE_WEIGHT = float(os.getenv("DENSE_WEIGHT", "0.40"))
+LEXICAL_WEIGHT = float(os.getenv("LEXICAL_WEIGHT", "0.20"))
 
 def get_bool_env(name: str, default: bool = False) -> bool:
     val = os.getenv(name)
@@ -51,5 +52,5 @@ FORCE_SAMPLE_CORPUS = get_bool_env("FORCE_SAMPLE_CORPUS", False)
 ALLOW_DATASET_FALLBACK = get_bool_env("ALLOW_DATASET_FALLBACK", True)
 
 # Supported Languages in MSMARCO-XI
-SUPPORTED_LANGUAGES = ["en", "hi", "ta"]
-DEFAULT_LANG = "en"
+SUPPORTED_LANGUAGES = ["gu", "hi", "te"]
+DEFAULT_LANG = "hi"

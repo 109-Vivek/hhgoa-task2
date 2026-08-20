@@ -70,8 +70,8 @@ class ResilientLLMClient:
             ]
         )
 
-        lang_names = {"en": "English", "hi": "Hindi", "ta": "Tamil"}
-        target_lang = lang_names.get(lang, "the same language as the query")
+        lang_names = {"gu": "Gujarati", "hi": "Hindi", "te": "Telugu"}
+        target_lang = lang_names.get(lang, "the same Indic language as the query")
 
         system_prompt = (
             f"You are an ultra-fast, accurate Indic Voice-RAG assistant for HH Goa 2026. "
@@ -229,10 +229,12 @@ class ResilientLLMClient:
 
     @staticmethod
     def _get_abstention_text(lang: str) -> str:
-        if "hi" in lang:
+        if "gu" in lang:
+            return "આ પ્રશ્નનો સચોટ જવાબ આપવા માટે ડેટાબેઝમાં પૂરતો સંદર્ભ મળ્યો નથી."
+        elif "te" in lang:
+            return "ఈ ప్రశ్నకు ఖచ్చితమైన సమాధానం ఇవ్వడానికి డేటాబేస్‌లో తగినంత సమాచారం లేదు."
+        elif "hi" in lang:
             return "मुझे इस प्रश्न का उत्तर देने के लिए डेटाबेस में पर्याप्त प्रासंगिक संदर्भ नहीं मिला।"
-        elif "ta" in lang:
-            return "இந்தக் கேள்விக்கு துல்லியமாக பதிலளிக்க தரவுத்தளத்தில் போதிய சூழல் கிடைக்கவில்லை."
         return "I do not have enough relevant context in the database to answer this question accurately."
 
     @staticmethod

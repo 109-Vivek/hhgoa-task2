@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import json
 import argparse
@@ -6,20 +7,37 @@ import numpy as np
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+# Allow running directly as `python src\benchmark.py` from repo root on Windows
+_repo_root = Path(__file__).resolve().parent.parent
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from src.harness.orchestrator import VoiceRAGOrchestrator, PipelineResponse
 
 BENCHMARK_QUERIES = {
-    "en": [
-        "What is the capital of India?",
-        "Who is the Prime Minister of India?",
-        "What is Retrieval-Augmented Generation?",
-        "What is the largest ocean in the world?",
-        "Where is Goa located?",
-        "Tell me about the smallest state in India.",
-        "How does RAG reduce hallucinations in language models?",
-        "What ocean lies south of the Arctic Ocean?",
-        "When was the foundation stone of New Delhi laid?",
-        "What is quantum gravity in theoretical physics?",  # Out of domain query to test abstention
+    "gu": [
+        "ભારતની રાજધાની કઈ છે?",
+        "ભારતના વડાપ્રધાન કોણ છે?",
+        "ગોવા ક્યાં આવેલું છે?",
+        "રીટ્રીવલ-ઓગમેન્ટેડ જનરેશન શું છે?",
+        "વિશ્વનો સૌથી મોટો મહાસાગર કયો છે?",
+        "ભારતનું સૌથી નાનું રાજ્ય કયું છે?",
+        "RAG પદ્ધતિ એઆઈ મોડેલોમાં ભ્રમણા કેવી રીતે ઘટાડે છે?",
+        "પ્રશાંત મહાસાગરનો વિસ્તાર ક્યાં સુધી છે?",
+        "૧૯૧૧ માં નવી દિલ્હીનો શિલાન્યાસ કોણે કર્યો હતો?",
+        "ક્વોન્ટમ ફિઝિક્સના મૂળભૂત નિયમો શું છે?",  # Out of domain query to test abstention
     ],
     "hi": [
         "भारत की राजधानी क्या है?",
@@ -33,17 +51,17 @@ BENCHMARK_QUERIES = {
         "1911 में नई दिल्ली की आधारशिला किसने रखी थी?",
         "क्वांटम भौतिकी के मूल सिद्धांत क्या हैं?",  # Out of domain query
     ],
-    "ta": [
-        "இந்தியாவின் தலைநகரம் எது?",
-        "இந்தியாவின் பிரதமர் யார்?",
-        "கோவா எங்கு அமைந்துள்ளது?",
-        "மீட்டெடுப்பு ஆக்மென்டட் தலைமுறை (RAG) என்றால் என்ன?",
-        "உலகின் மிகப்பெரிய பெருங்கடல் எது?",
-        "இந்தியாவின் மிகச்சிறிய மாநிலம் எது?",
-        "RAG முறை செயற்கை நுண்ணறிவில் எவ்வாறு உதவுகிறது?",
-        "பசிபிக் பெருங்கடல் எந்தப் பகுதிகளில் பரவியுள்ளது?",
-        "1911 இல் புது தில்லிக்கான அடிக்கல்லை நாட்டியவர் யார்?",
-        "குவாண்டம் இயற்பியல் விதிகள் யாவை?",  # Out of domain query
+    "te": [
+        "భారతదేశ రాజధాని ఏది?",
+        "భారత ప్రధానమంత్రి ఎవరు?",
+        "గోవా ఎక్కడ ఉంది?",
+        "రిట్రీవల్-ఆగ్మెంటెడ్ జనరేషన్ అంటే ఏమిటి?",
+        "ప్రపంచంలో అతిపెద్ద మహాసముద్రం ఏది?",
+        "భారతదేశంలో అతి చిన్న రాష్ట్రం ఏది?",
+        "RAG విధానం ఏఐ మోడల్స్‌లో భ్రమలను ఎలా తగ్గిస్తుంది?",
+        "పసిఫిక్ మహాసముద్రం ఏ ప్రాంతాలలో విస్తరించి ఉంది?",
+        "1911 లో న్యూఢిల్లీకి శంకుస్థాపన చేసినది ఎవరు?",
+        "క్వాంటం భౌతిక శాస్త్ర నియమాలు ఏమిటి?",  # Out of domain query
     ],
 }
 
@@ -66,13 +84,13 @@ def calculate_percentiles(values: List[float]) -> Dict[str, float]:
 
 def run_benchmark(
     num_queries: int = 30,
-    languages: List[str] = ["en", "hi", "ta"],
+    languages: List[str] = ["gu", "hi", "te"],
     output_json: Optional[str] = None,
     output_md: Optional[str] = None,
 ) -> Dict[str, Any]:
     print("\n=======================================================")
-    print("🚀 Initializing Indic Voice-RAG Benchmark Harness")
-    print(f"📊 Languages: {languages} | Total Target Queries: {num_queries}")
+    print("[BENCHMARK] Initializing Indic Voice-RAG Benchmark Harness")
+    print(f"[BENCHMARK] Languages: {languages} | Total Target Queries: {num_queries}")
     print("=======================================================\n")
 
     orchestrator = VoiceRAGOrchestrator()
@@ -155,7 +173,7 @@ def run_benchmark(
     retrieval = summary_stats["retrieval_total"]
 
     print("\n" + "=" * 70)
-    print("📈 BENCHMARK RESULTS & LATENCY ANALYTICS SUMMARY")
+    print("[RESULTS] BENCHMARK RESULTS & LATENCY ANALYTICS SUMMARY")
     print("=" * 70)
     print(f"Total Queries Evaluated : {len(query_queue)}")
     print(f"Languages Tested        : {', '.join(languages)}")
@@ -172,10 +190,10 @@ def run_benchmark(
     p70_e2e = e2e["p70"]
     p100_e2e = e2e["p100"]
 
-    print(f"\n🎯 Target Verification: <200ms Budget Target")
-    print(f"   • P50 Latency: {p50_e2e:.2f} ms [{'✅ PASS' if p50_e2e <= 200 else '⚠️ EXCEEDS'}]")
-    print(f"   • P70 Latency: {p70_e2e:.2f} ms [{'✅ PASS' if p70_e2e <= 200 else '⚠️ EXCEEDS'}]")
-    print(f"   • P100 Latency: {p100_e2e:.2f} ms")
+    print(f"\n[EVALUATION] Target Verification: <200ms Budget Target")
+    print(f"   * P50 Latency: {p50_e2e:.2f} ms [{'PASS' if p50_e2e <= 200 else 'EXCEEDS'}]")
+    print(f"   * P70 Latency: {p70_e2e:.2f} ms [{'PASS' if p70_e2e <= 200 else 'EXCEEDS'}]")
+    print(f"   * P100 Latency: {p100_e2e:.2f} ms")
     print("=" * 70 + "\n")
 
     report = {
@@ -216,7 +234,7 @@ def run_benchmark(
 def main():
     parser = argparse.ArgumentParser(description="Voice Indic RAG Latency Benchmark")
     parser.add_argument("--num-queries", type=int, default=30, help="Number of benchmark queries")
-    parser.add_argument("--languages", nargs="+", default=["en", "hi", "ta"], help="Languages to benchmark")
+    parser.add_argument("--languages", nargs="+", default=["gu", "hi", "te"], help="Languages to benchmark")
     parser.add_argument("--output-json", type=str, default="data/benchmark_results.json", help="Path to save JSON results")
     parser.add_argument("--output-md", type=str, default="data/benchmark_report.md", help="Path to save Markdown report")
     args = parser.parse_args()

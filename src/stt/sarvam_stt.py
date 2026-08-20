@@ -18,7 +18,7 @@ class TranscriptionResult:
 class SarvamSTT:
     """
     Speech-to-Text transcriber using Sarvam AI API (saaras:v2 model)
-    with support for Hindi (hi-IN), Tamil (ta-IN), Indian English (en-IN), and configurable mock fallback.
+    with support for Gujarati (gu-IN), Hindi (hi-IN), Telugu (te-IN), and configurable mock fallback.
     """
 
     SARVAM_STT_URL = "https://api.sarvam.ai/speech-to-text"
@@ -115,12 +115,12 @@ class SarvamSTT:
     def _mock_transcription(start_time: float, language_code: str) -> TranscriptionResult:
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         # Return realistic sample transcript for local testing
-        if "hi" in language_code:
-            text = "भारत की राजधानी क्या है?"
-        elif "ta" in language_code:
-            text = "இந்தியாவின் தலைநகரம் எது?"
+        if "gu" in language_code:
+            text = "ભારતની રાજધાની કઈ છે?"
+        elif "te" in language_code:
+            text = "భారతదేశ రాజధాని ఏది?"
         else:
-            text = "What is the capital of India?"
+            text = "भारत की राजधानी क्या है?"
 
         return TranscriptionResult(
             text=text,
