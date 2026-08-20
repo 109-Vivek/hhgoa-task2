@@ -30,8 +30,10 @@ class OutputGuardrail:
         r"not mentioned in the context",
         r"जानकारी उपलब्ध नहीं है",
         r"संदर्भ में उल्लेख नहीं है",
-        r"போதிய தகவல் இல்லை",
-        r"சரியான தகவல் கிடைக்கவில்லை",
+        r"સંદર્ભમાં પૂરતી માહિતી નથી",
+        r"ડેટાબેઝમાં પૂરતો સંદર્ભ નથી",
+        r"తగినంత సమాచారం లేదు",
+        r"సందర్భంలో పేర్కొనబడలేదు",
         r"i don't know",
         r"not enough information",
     ]
@@ -44,11 +46,13 @@ class OutputGuardrail:
         if not text:
             return set()
         text = text.lower()
-        words = re.findall(r"[\w\u0900-\u097F\u0B80-\u0BFF]+", text)
+        # Support Devanagari, Gujarati, Telugu, and Latin
+        words = re.findall(r"[\w\u0900-\u097F\u0A80-\u0AFF\u0C00-\u0C7F]+", text)
         stopwords = {
             "the", "is", "at", "which", "on", "a", "an", "and", "or", "in", "to", "for", "of", "with",
             "का", "के", "की", "है", "हैं", "में", "से", "पर", "और", "को", "एक", "था", "थी", "थे",
-            "இல்", "ஒரு", "மற்றும்", "ஆகும்", "உள்ளது", "என்பது"
+            "અને", "છે", "માં", "ના", "ની", "નું", "નો", "માટે", "એક", "હતા", "હતી",
+            "మరియు", "ఉంది", "లో", "యొక్క", "ఒక", "కోసం", "ఉన్నారు", "ఉన్నాయి", "అని"
         }
         return {w for w in words if len(w) > 2 and w not in stopwords}
 

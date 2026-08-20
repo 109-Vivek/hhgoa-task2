@@ -20,13 +20,13 @@ class BM25Index:
     @staticmethod
     def tokenize(text: str) -> List[str]:
         """
-        Multilingual tokenizer supporting Indic scripts (Devanagari, Tamil) and English.
+        Multilingual tokenizer supporting Indic scripts (Gujarati, Devanagari/Hindi, Telugu) and alphanumeric tokens.
         """
         if not text:
             return []
         text = text.lower()
-        # Keep alphanumeric, Devanagari (\u0900-\u097F), Tamil (\u0B80-\u0BFF)
-        tokens = re.findall(r"[\w\u0900-\u097F\u0B80-\u0BFF]+", text)
+        # Keep alphanumeric, Devanagari (\u0900-\u097F), Gujarati (\u0A80-\u0AFF), Telugu (\u0C00-\u0C7F)
+        tokens = re.findall(r"[\w\u0900-\u097F\u0A80-\u0AFF\u0C00-\u0C7F]+", text)
         return tokens
 
     def index_documents(self, documents: List[str], metadata: List[Dict[str, Any]]):

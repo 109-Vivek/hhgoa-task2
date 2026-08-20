@@ -28,8 +28,8 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your SARVAM_API_KEY, GROQ_API_KEY, etc.
 
-# 4. Build indices (English, Hindi, Tamil)
-python -m src.indexer --languages en hi ta
+# 4. Build indices (Gujarati, Hindi, Telugu)
+python -m src.indexer --languages gu hi te
 
 # 5. Start the FastAPI backend
 uvicorn src.server:app --host 0.0.0.0 --port 8000 --reload

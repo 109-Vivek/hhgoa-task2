@@ -30,6 +30,10 @@ class RetrievedDocument:
     lang: str
     rrf_score: float
     dense_score: float
+    q2q_score: float = 0.0
+    passage_dense_score: float = 0.0
+    lexical_score: float = 0.0
+    match_sources: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -67,7 +71,7 @@ class PipelineResponse:
 class VoiceRAGOrchestrator:
     """
     Main orchestration harness for the Voice-Enabled Indic RAG system.
-    Coordinates STT, Input Guardrails, Multilingual Hybrid Search (FAISS + BM25s),
+    Coordinates STT, Input Guardrails, Multilingual Dual-Track Hybrid Search (Query-Anchor + Passage FAISS + BM25s),
     Context Grounding & Abstention, LLM Synthesis, and Output Guardrails.
     """
 
@@ -94,23 +98,27 @@ class VoiceRAGOrchestrator:
         self._load_indices()
 
     def _load_indices(self):
-        """Loads dense and lexical indices for each supported language."""
+        """Loads passage dense, query anchor dense, and lexical indices for each supported language."""
         for lang in SUPPORTED_LANGUAGES:
             lang_dir = self.index_dir / lang
             dense = FAISSIndex()
+            query_dense = FAISSIndex()
             bm25 = BM25Index()
 
-            dense_loaded = dense.load(lang_dir)
+            dense_loaded = dense.load(lang_dir, index_name="faiss.index", meta_name="faiss_meta.json")
+            query_loaded = query_dense.load(lang_dir, index_name="query_faiss.index", meta_name="query_faiss_meta.json")
             bm25_loaded = bm25.load(lang_dir)
 
             if dense_loaded and bm25_loaded:
-                print(f"[Orchestrator] Loaded indices for language '{lang}' ({dense.count()} docs)")
+                q_count = query_dense.count() if query_loaded else 0
+                print(f"[Orchestrator] Loaded indices for language '{lang}' ({dense.count()} passage docs, {q_count} query anchors)")
             else:
                 print(f"[Orchestrator] Notice: Index for language '{lang}' not yet built at {lang_dir}")
 
             self.search_engines[lang] = HybridSearchEngine(
                 dense_index=dense,
                 lexical_index=bm25,
+                query_dense_index=query_dense if query_loaded else None,
                 embedder=self.embedder,
             )
 
@@ -251,6 +259,10 @@ class VoiceRAGOrchestrator:
                 lang=str(item.get("lang", lang)),
                 rrf_score=float(item.get("rrf_score", 0.0)),
                 dense_score=d_score,
+                q2q_score=float(item.get("q2q_score", 0.0)),
+                passage_dense_score=float(item.get("passage_dense_score", 0.0)),
+                lexical_score=float(item.get("lexical_score", 0.0)),
+                match_sources=item.get("match_sources", []),
                 metadata=item.get("metadata", {}),
             )
             retrieved_docs.append(doc)
@@ -303,20 +315,25 @@ class VoiceRAGOrchestrator:
         if not lang_code:
             return DEFAULT_LANG
         code = lang_code.lower()
+        if "gu" in code:
+            return "gu"
         if "hi" in code:
             return "hi"
-        if "ta" in code:
-            return "ta"
-        return "en"
+        if "te" in code:
+            return "te"
+        return DEFAULT_LANG
 
     @staticmethod
-    def detect_language(text: str, fallback_code: str = "en") -> str:
+    def detect_language(text: str, fallback_code: str = DEFAULT_LANG) -> str:
         if not text:
             return VoiceRAGOrchestrator._normalize_lang(fallback_code)
-        # Check Devanagari range (Hindi)
+        # Check Gujarati range (\u0A80-\u0AFF)
+        if any('\u0A80' <= ch <= '\u0AFF' for ch in text):
+            return "gu"
+        # Check Devanagari range (Hindi) (\u0900-\u097F)
         if any('\u0900' <= ch <= '\u097F' for ch in text):
             return "hi"
-        # Check Tamil range (Tamil)
-        if any('\u0B80' <= ch <= '\u0BFF' for ch in text):
-            return "ta"
+        # Check Telugu range (\u0C00-\u0C7F)
+        if any('\u0C00' <= ch <= '\u0C7F' for ch in text):
+            return "te"
         return VoiceRAGOrchestrator._normalize_lang(fallback_code)

@@ -59,23 +59,23 @@ class FAISSIndex:
 
         return results
 
-    def save(self, save_dir: Path):
+    def save(self, save_dir: Path, index_name: str = "faiss.index", meta_name: str = "faiss_meta.json"):
         """Persists the FAISS index and metadata store to disk."""
         save_dir = Path(save_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
         
-        index_path = save_dir / "faiss.index"
-        meta_path = save_dir / "faiss_meta.json"
+        index_path = save_dir / index_name
+        meta_path = save_dir / meta_name
 
         faiss.write_index(self.index, str(index_path))
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(self.metadata_store, f, ensure_ascii=False, indent=2)
 
-    def load(self, save_dir: Path) -> bool:
+    def load(self, save_dir: Path, index_name: str = "faiss.index", meta_name: str = "faiss_meta.json") -> bool:
         """Loads FAISS index and metadata from disk."""
         save_dir = Path(save_dir)
-        index_path = save_dir / "faiss.index"
-        meta_path = save_dir / "faiss_meta.json"
+        index_path = save_dir / index_name
+        meta_path = save_dir / meta_name
 
         if not index_path.exists() or not meta_path.exists():
             return False

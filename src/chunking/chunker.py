@@ -22,6 +22,16 @@ class Chunk:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class QueryAnchor:
+    anchor_id: str
+    query: str
+    passage_id: str
+    passage_text: str
+    lang: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
 class MultiTierChunkingEngine:
     """
     A multi-tiered, metadata-aware chunking engine designed for MSMARCO-XI.
@@ -41,9 +51,10 @@ class MultiTierChunkingEngine:
     def _split_into_sentences(text: str, lang: str = "en") -> List[str]:
         if not text:
             return []
-        pattern = r"(?<=[.!?।\|])\s+"
+        # Multi-Indic & Latin sentence boundary regex supporting Danda (।), Double Danda (॥), punctuation, and paragraphs
+        pattern = r"(?<=[.!?।॥\|\n])\s+"
         sentences = re.split(pattern, text)
-        return [s.strip() for s in sentences if s.strip()]
+        return [s.strip() for s in sentences if len(s.strip()) > 0]
 
     def chunk_passage(
         self,
@@ -57,6 +68,8 @@ class MultiTierChunkingEngine:
         meta = extra_metadata or {}
         meta["lang"] = lang
         meta["passage_id"] = passage_id
+        meta["word_count"] = len(passage_text.split())
+        meta["char_len"] = len(passage_text)
 
         if strategy == ChunkingStrategy.ATOMIC_PASSAGE:
             return [
@@ -158,3 +171,35 @@ class MultiTierChunkingEngine:
             return chunks
 
         return []
+
+    def extract_query_anchors(
+        self,
+        items: List[Dict[str, Any]],
+        lang: str = "en",
+    ) -> List[QueryAnchor]:
+        """
+        Extracts high-precision query-to-passage anchor links from MSMARCO-XI data pairs.
+        Enables Query-to-Query intent matching in parallel with passage retrieval.
+        """
+        anchors: List[QueryAnchor] = []
+        for idx, item in enumerate(items):
+            query = item.get("query", "").strip()
+            passage_id = str(item.get("passage_id", item.get("id", f"{lang}_{idx}")))
+            passage_text = item.get("passage", item.get("text", "")).strip()
+
+            if query and passage_text:
+                anchor = QueryAnchor(
+                    anchor_id=f"{passage_id}_qa_{idx}",
+                    query=query,
+                    passage_id=passage_id,
+                    passage_text=passage_text,
+                    lang=lang,
+                    metadata={
+                        "passage_id": passage_id,
+                        "lang": lang,
+                        "query": query,
+                    },
+                )
+                anchors.append(anchor)
+        return anchors
+
