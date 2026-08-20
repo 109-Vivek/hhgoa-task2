@@ -54,9 +54,16 @@ class BM25Index:
         results, scores = self.retriever.retrieve(query_tokens, k=min(top_k, len(self.corpus_documents)))
 
         output = []
-        for doc_idx, score in zip(results[0], scores[0]):
-            idx = int(doc_idx)
-            if idx < len(self.metadata_store):
+        for doc_item, score in zip(results[0], scores[0]):
+            if isinstance(doc_item, dict):
+                idx = int(doc_item.get("id", -1))
+            else:
+                try:
+                    idx = int(doc_item)
+                except Exception:
+                    idx = -1
+
+            if 0 <= idx < len(self.metadata_store):
                 output.append((self.metadata_store[idx], float(score)))
 
         return output

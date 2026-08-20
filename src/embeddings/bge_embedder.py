@@ -27,7 +27,14 @@ class BGEEmbedder:
             except Exception:
                 pass
         
-        self.dim = EMBEDDING_DIM
+        self.model.eval()
+        
+        # Warmup forward pass to compile GPU/MPS kernels and eliminate query latency
+        try:
+            with torch.no_grad():
+                _ = self.model.encode(["warmup query text"], normalize_embeddings=True, convert_to_numpy=True)
+        except Exception:
+            pass
 
     def encode(
         self,
@@ -46,13 +53,14 @@ class BGEEmbedder:
             return np.empty((0, self.dim), dtype=np.float32)
 
         start_time = time.perf_counter()
-        embeddings = self.model.encode(
-            texts,
-            batch_size=batch_size,
-            show_progress_bar=show_progress_bar,
-            normalize_embeddings=normalize,
-            convert_to_numpy=True,
-        )
+        with torch.no_grad():
+            embeddings = self.model.encode(
+                texts,
+                batch_size=batch_size,
+                show_progress_bar=show_progress_bar,
+                normalize_embeddings=normalize,
+                convert_to_numpy=True,
+            )
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
         if embeddings.dtype != np.float32:
