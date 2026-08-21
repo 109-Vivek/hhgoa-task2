@@ -62,7 +62,7 @@ mkdir -p "$APP_DIR/data/indices"
 
 # 6. Setup Systemd Service for FastAPI Server
 echo "⚙️ Configuring Systemd Service (hhgoa.service)..."
-sudo bash -c "cat <<EOF > /etc/systemd/system/hhgoa.service
+sudo tee /etc/systemd/system/hhgoa.service > /dev/null << EOF
 [Unit]
 Description=HH Goa Indic Voice RAG FastAPI Server
 After=network.target
@@ -70,7 +70,7 @@ After=network.target
 [Service]
 User=$USER
 WorkingDirectory=$APP_DIR
-Environment=\"PATH=$APP_DIR/.venv/bin:/usr/local/bin:/usr/bin:/bin\"
+Environment="PATH=$APP_DIR/.venv/bin:/usr/local/bin:/usr/bin:/bin"
 EnvironmentFile=$APP_DIR/.env
 ExecStart=$APP_DIR/.venv/bin/python -m uvicorn src.server:app --host 127.0.0.1 --port 8000 --workers 1
 Restart=always
@@ -78,7 +78,7 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-EOF"
+EOF
 
 sudo systemctl daemon-reload
 sudo systemctl enable hhgoa
@@ -86,7 +86,7 @@ sudo systemctl restart hhgoa
 
 # 7. Configure Nginx Reverse Proxy on Port 80
 echo "🌐 Configuring Nginx Reverse Proxy on port 80..."
-sudo bash -c "cat <<EOF > /etc/nginx/sites-available/hhgoa
+sudo tee /etc/nginx/sites-available/hhgoa > /dev/null << 'EOF'
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
@@ -101,17 +101,17 @@ server {
     location / {
         proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 300s;
         proxy_connect_timeout 75s;
     }
 }
-EOF"
+EOF
 
 sudo ln -sf /etc/nginx/sites-available/hhgoa /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
