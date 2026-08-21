@@ -180,6 +180,11 @@ async def handle_benchmark(num_queries: int = 15, languages: str = "gu,hi,te"):
     return results
 
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "service": "hhgoa-voice-rag"}
+
+
 # Serve static React frontend files if built
 frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 if frontend_dist.exists():
@@ -195,4 +200,5 @@ if frontend_dist.exists():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("src.server:app", host="0.0.0.0", port=8000, reload=False)
+    port = int(os.getenv("PORT", "8080"))
+    uvicorn.run("src.server:app", host="0.0.0.0", port=port, reload=False)

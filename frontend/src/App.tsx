@@ -9,7 +9,6 @@ import {
   Layers, 
   CheckCircle2, 
   AlertTriangle, 
-  Database, 
   BarChart3, 
   BookOpen, 
   Clock, 
@@ -90,11 +89,11 @@ interface BenchmarkReport {
   }>;
 }
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 
 export const App: React.FC = () => {
   // State
-  const [activeTab, setActiveTab] = useState<'rag' | 'analytics' | 'indexing' | 'architecture'>('rag');
+  const [activeTab, setActiveTab] = useState<'rag' | 'analytics' | 'architecture'>('rag');
   const [inputMode, setInputMode] = useState<'voice' | 'text'>('voice');
   const [selectedLang, setSelectedLang] = useState<string>('auto');
   const [queryText, setQueryText] = useState<string>('');
@@ -113,14 +112,10 @@ export const App: React.FC = () => {
   const animationFrameRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
 
-  // Benchmark & Indexing State
+  // Benchmark State
   const [benchmarkResult, setBenchmarkResult] = useState<BenchmarkReport | null>(null);
   const [isBenchmarking, setIsBenchmarking] = useState<boolean>(false);
   const [benchQueriesCount, setBenchQueriesCount] = useState<number>(15);
-  const [reindexLang, setReindexLang] = useState<string>('all');
-  const [reindexStrategy, setReindexStrategy] = useState<string>('metadata_augmented');
-  const [isReindexing, setIsReindexing] = useState<boolean>(false);
-  const [reindexStatusMsg, setReindexStatusMsg] = useState<string>('');
 
   // Fetch initial system status
   useEffect(() => {
@@ -258,7 +253,7 @@ export const App: React.FC = () => {
       }
     } catch (err) {
       console.error('Error submitting query:', err);
-      alert('Could not connect to FastAPI server at http://localhost:8000');
+      alert('Could not connect to FastAPI server. Please check your network or server status.');
     } finally {
       setIsLoading(false);
     }
@@ -308,32 +303,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // Trigger Reindexing
-  const handleReindex = async () => {
-    setIsReindexing(true);
-    setReindexStatusMsg('Re-indexing in progress...');
-    try {
-      const res = await fetch(`${API_BASE}/api/reindex`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          language: reindexLang,
-          strategy: reindexStrategy,
-          limit: 50,
-        }),
-      });
-      if (res.ok) {
-        setReindexStatusMsg(`Re-indexing completed successfully for ${reindexLang}!`);
-        fetchStatus();
-      } else {
-        setReindexStatusMsg('Re-indexing encountered an error.');
-      }
-    } catch (err) {
-      setReindexStatusMsg('Could not connect to server.');
-    } finally {
-      setIsReindexing(false);
-    }
-  };
+
 
   const sampleQuestions = {
     en: [
@@ -392,12 +362,7 @@ export const App: React.FC = () => {
         >
           <BarChart3 size={18} /> Latency Analytics (P50/P70/P100)
         </button>
-        <button
-          className={`tab-btn ${activeTab === 'indexing' ? 'active' : ''}`}
-          onClick={() => setActiveTab('indexing')}
-        >
-          <Database size={18} /> Indexing &amp; Chunking
-        </button>
+
         <button
           className={`tab-btn ${activeTab === 'architecture' ? 'active' : ''}`}
           onClick={() => setActiveTab('architecture')}
@@ -849,107 +814,7 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: INDEXING & CHUNKING STRATEGY MANAGER */}
-      {activeTab === 'indexing' && (
-        <div className="animate-fade-in">
-          <div className="glass-panel" style={{ padding: 24, marginBottom: 24 }}>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: 4 }}>📚 Multi-Tier Chunking &amp; Index Manager</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', marginBottom: 20 }}>
-              Build and configure high-performance dense (FAISS HNSW) and lexical (BM25s) indices for Indic languages.
-            </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
-              <div className="metric-box">
-                <div className="metric-title">🇬🇧 English Index (en)</div>
-                <div className="metric-val">{systemStatus?.indexed_doc_counts?.en ?? 5} docs</div>
-                <div className="metric-sub">FAISS HNSW + BM25s</div>
-              </div>
-              <div className="metric-box">
-                <div className="metric-title">🇮🇳 Hindi Index (hi)</div>
-                <div className="metric-val">{systemStatus?.indexed_doc_counts?.hi ?? 5} docs</div>
-                <div className="metric-sub">Devanagari Tokenization</div>
-              </div>
-              <div className="metric-box">
-                <div className="metric-title">🇮🇳 Gujarati Index (gu)</div>
-                <div className="metric-val">{systemStatus?.indexed_doc_counts?.gu ?? 5} docs</div>
-                <div className="metric-sub">Gujarati Script Tokenization</div>
-              </div>
-              <div className="metric-box">
-                <div className="metric-title">🇮🇳 Telugu Index (te)</div>
-                <div className="metric-val">{systemStatus?.indexed_doc_counts?.te ?? 5} docs</div>
-                <div className="metric-sub">Telugu Script Tokenization</div>
-              </div>
-            </div>
-
-            {/* Reindexing Form */}
-            <div style={{ background: 'rgba(0,0,0,0.25)', padding: 20, borderRadius: 12, border: '1px solid var(--border-color)' }}>
-              <h3 style={{ fontSize: '1.1rem', marginBottom: 14 }}>⚙️ Re-Build Indices</h3>
-              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-                <div>
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
-                    Language:
-                  </label>
-                  <select
-                    value={reindexLang}
-                    onChange={(e) => setReindexLang(e.target.value)}
-                    style={{
-                      background: 'rgba(255,255,255,0.06)',
-                      color: 'white',
-                      border: '1px solid var(--border-color)',
-                      padding: '8px 14px',
-                      borderRadius: 8,
-                    }}
-                  >
-                    <option value="all">All Languages (gu, hi, te)</option>
-                    <option value="gu">Gujarati (gu)</option>
-                    <option value="hi">Hindi (hi)</option>
-                    <option value="te">Telugu (te)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
-                    Chunking Strategy:
-                  </label>
-                  <select
-                    value={reindexStrategy}
-                    onChange={(e) => setReindexStrategy(e.target.value)}
-                    style={{
-                      background: 'rgba(255,255,255,0.06)',
-                      color: 'white',
-                      border: '1px solid var(--border-color)',
-                      padding: '8px 14px',
-                      borderRadius: 8,
-                    }}
-                  >
-                    <option value="metadata_augmented">Metadata Augmented ([LANG: ...] [DOC: ...])</option>
-                    <option value="atomic_passage">Atomic Passage (1:1 MSMARCO Unit)</option>
-                    <option value="sliding_window">Hierarchical Sliding Window (256/64 overlap)</option>
-                    <option value="query_anchor">Query-Anchor Synthetic Pairing</option>
-                  </select>
-                </div>
-
-                <div style={{ alignSelf: 'flex-end' }}>
-                  <button
-                    className="btn-primary"
-                    onClick={handleReindex}
-                    disabled={isReindexing}
-                  >
-                    <Database size={16} />
-                    {isReindexing ? 'Indexing...' : 'Build Indices Now'}
-                  </button>
-                </div>
-              </div>
-
-              {reindexStatusMsg && (
-                <div style={{ marginTop: 14, fontSize: '0.9rem', color: 'var(--accent-cyan)' }}>
-                  {reindexStatusMsg}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* TAB 4: ARCHITECTURE & SPECS */}
       {activeTab === 'architecture' && (
