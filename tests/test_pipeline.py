@@ -114,11 +114,11 @@ class TestVoiceIndicRAGPipeline(unittest.TestCase):
         self.assertEqual(response_hi.detected_lang, "hi")
         self.assertGreater(len(response_hi.retrieved_documents), 0)
 
-        # Test Tamil query
-        response_ta = orchestrator.process_query("இந்தியாவின் தலைநகரம் எது?", "auto")
-        self.assertIsNotNone(response_ta.answer)
-        self.assertEqual(response_ta.detected_lang, "ta")
-        self.assertGreater(len(response_ta.retrieved_documents), 0)
+        # Test Telugu query
+        response_te = orchestrator.process_query("భారతదేశ రాజధాని ఏది?", "auto")
+        self.assertIsNotNone(response_te.answer)
+        self.assertEqual(response_te.detected_lang, "te")
+        self.assertGreater(len(response_te.retrieved_documents), 0)
 
 
     def test_query_anchor_extraction(self):
