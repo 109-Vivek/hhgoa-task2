@@ -344,13 +344,18 @@ def build_indices_for_language(
     embedder = embedder or get_embedder()
 
     # 1. Fetch raw data from stream (excluding already indexed IDs)
-    remaining_needed = limit - processed_count
-    if use_sample:
-        raise RuntimeError(
-            "--use-sample is disabled. This indexer must use MSMARCO-XI."
-        )
-
-    raw_items = load_msmarco_xi_dataset(lang, limit=remaining_needed)
+    if use_sample or FORCE_SAMPLE_CORPUS:
+        print(f"[Indexer] Using curated multilingual sample corpus for '{lang}'...")
+        raw_items = SAMPLE_CORPUS.get(lang, SAMPLE_CORPUS.get("hi", []))
+    else:
+        try:
+            raw_items = load_msmarco_xi_dataset(lang, limit=remaining_needed)
+        except Exception as e:
+            if ALLOW_DATASET_FALLBACK:
+                print(f"[Indexer] ⚠️ Failed to load MSMARCO-XI dataset ({e}). Falling back to curated sample corpus.")
+                raw_items = SAMPLE_CORPUS.get(lang, SAMPLE_CORPUS.get("hi", []))
+            else:
+                raise e
 
     # Filter out already indexed items
     new_items = [item for item in raw_items if str(item.get("passage_id", item.get("id", ""))) not in indexed_ids]
