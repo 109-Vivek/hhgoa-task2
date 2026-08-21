@@ -91,52 +91,44 @@ class HybridSearchEngine:
         def _get_doc_id(meta: Dict[str, Any]) -> str:
             return str(meta.get("passage_id") or meta.get("doc_id") or meta.get("chunk_id", ""))
 
-        # Track A: Query-to-Query Anchor Matches → Passage Lookup via Metadata
-        # Step 1: Collect matched passage_ids from query anchor results
-        anchor_passage_ids: Dict[str, float] = {}  # passage_id → best similarity score
+        # Track A: Query-to-Query Anchor Matches (Highest Intent Precision)
+        # Look up matched queries, then pull ALL associated passage chunks from the passage dense index
         for rank, (meta, score) in enumerate(query_anchor_results, start=1):
-            pid = str(meta.get("passage_id") or "")
-            if pid:
-                # Keep best similarity score per passage_id; also accumulate RRF contribution
-                if pid not in anchor_passage_ids or score > anchor_passage_ids[pid]:
-                    anchor_passage_ids[pid] = float(score)
+            doc_id = _get_doc_id(meta)
+            if not doc_id:
+                continue
 
-        # Step 2: Look up ALL passage chunks in the passage dense index that belong to matched passage_ids
-        # Build a passage_id → list of chunk metadata map from the passage index store
-        passage_chunk_map: Dict[str, List[Dict[str, Any]]] = {}
-        for chunk_meta in self.dense_index.metadata_store:
-            pid = str(chunk_meta.get("passage_id") or "")
-            if pid in anchor_passage_ids:
-                passage_chunk_map.setdefault(pid, []).append(chunk_meta)
+            # Find all matching passage chunks in the passage dense index
+            matching_chunks = [
+                chunk_meta for chunk_meta in self.dense_index.metadata_store
+                if _get_doc_id(chunk_meta) == doc_id or str(chunk_meta.get("passage_id", "")) == doc_id
+            ]
 
-        # Step 3: Register all retrieved chunks into the fusion maps with RRF scores
-        for rank, (pid, sim_score) in enumerate(
-            sorted(anchor_passage_ids.items(), key=lambda x: x[1], reverse=True), start=1
-        ):
-            chunks = passage_chunk_map.get(pid, [])
-            # If no chunks found in passage index (e.g. index not loaded), fall back to anchor's own passage_text
-            if not chunks:
-                matched_anchor_meta = next(
-                    (m for m, _ in query_anchor_results if str(m.get("passage_id") or "") == pid), None
-                )
-                if matched_anchor_meta:
-                    chunks = [{
-                        "chunk_id": matched_anchor_meta.get("anchor_id", f"{pid}_qa"),
-                        "passage_id": pid,
-                        "text": matched_anchor_meta.get("passage_text", matched_anchor_meta.get("text", "")),
-                        "raw_text": matched_anchor_meta.get("passage_text", matched_anchor_meta.get("raw_text", "")),
-                        "lang": matched_anchor_meta.get("lang", lang),
-                        "metadata": matched_anchor_meta.get("metadata", {}),
-                    }]
-
-            for chunk_meta in chunks:
-                doc_id = str(chunk_meta.get("chunk_id") or chunk_meta.get("passage_id") or pid)
+            if matching_chunks:
+                for chunk_meta in matching_chunks:
+                    c_id = _get_doc_id(chunk_meta)
+                    if not c_id:
+                        continue
+                    if c_id not in doc_map or not doc_map[c_id].get("raw_text"):
+                        doc_map[c_id] = chunk_meta
+                    q2q_sims[c_id] = max(q2q_sims.get(c_id, 0.0), float(score))
+                    rrf_score = self.query_anchor_weight * (1.0 / (self.rrf_k + rank))
+                    scores_map[c_id] = scores_map.get(c_id, 0.0) + rrf_score
+                    match_sources.setdefault(c_id, []).append(f"query_anchor (sim={score:.3f})")
+            else:
                 if doc_id not in doc_map:
-                    doc_map[doc_id] = chunk_meta
-                q2q_sims[doc_id] = max(q2q_sims.get(doc_id, 0.0), sim_score)
+                    doc_map[doc_id] = {
+                        "chunk_id": meta.get("anchor_id", f"{doc_id}_qa"),
+                        "passage_id": doc_id,
+                        "text": meta.get("passage_text", meta.get("text", "")),
+                        "raw_text": meta.get("passage_text", meta.get("raw_text", meta.get("text", ""))),
+                        "lang": meta.get("lang", lang),
+                        "metadata": meta.get("metadata", {}),
+                    }
+                q2q_sims[doc_id] = max(q2q_sims.get(doc_id, 0.0), float(score))
                 rrf_score = self.query_anchor_weight * (1.0 / (self.rrf_k + rank))
                 scores_map[doc_id] = scores_map.get(doc_id, 0.0) + rrf_score
-                match_sources.setdefault(doc_id, []).append(f"query_anchor→passage_lookup (sim={sim_score:.3f})")
+                match_sources.setdefault(doc_id, []).append(f"query_anchor (sim={score:.3f})")
 
         # Track B: Direct Query-to-Passage Dense Matches (Semantic Recall)
         for rank, (meta, score) in enumerate(passage_dense_results, start=1):
