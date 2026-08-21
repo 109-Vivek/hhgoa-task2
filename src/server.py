@@ -48,17 +48,10 @@ _orchestrator: Optional[VoiceRAGOrchestrator] = None
 def get_orchestrator() -> VoiceRAGOrchestrator:
     global _orchestrator
     if _orchestrator is None:
-        # Check if indices exist, if not auto-build sample indices
-        for lang in SUPPORTED_LANGUAGES:
-            lang_dir = Path(INDEX_DIR) / lang
-            if not (lang_dir / "faiss.index").exists():
-                print(f"[Server] Auto-building initial index for {lang}...")
-                build_all_indices(languages=[lang], limit=20, use_sample=True)
-
         _orchestrator = VoiceRAGOrchestrator()
         # Warmup query
         try:
-            _ = _orchestrator.process_query("Warmup query", "en")
+            _ = _orchestrator.process_query("Warmup query", "hi")
         except Exception:
             pass
     return _orchestrator
