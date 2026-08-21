@@ -13,6 +13,7 @@ if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 
 from src.config import (
+    DATA_DIR,
     INDEX_DIR,
     SUPPORTED_LANGUAGES,
     DEFAULT_LANG,
@@ -164,11 +165,14 @@ def load_msmarco_xi_dataset(lang: str, limit: int = 500) -> List[Dict[str, Any]]
             flush=True,
         )
 
-        # Download (or use cached) language-specific parquet file
+        # Download (or use cached) language-specific parquet file directly into data/raw/
+        raw_data_dir = DATA_DIR / "raw"
+        raw_data_dir.mkdir(parents=True, exist_ok=True)
         local_path = hf_hub_download(
             repo_id="ai4bharat/MSMARCO-XI",
             filename=parquet_filename,
             repo_type="dataset",
+            local_dir=raw_data_dir,
         )
 
         # Read using iter_batches to get RecordBatch objects (plain
