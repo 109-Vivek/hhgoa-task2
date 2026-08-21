@@ -1,0 +1,41 @@
+name: Deploy to GCP VM
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: SSH & Update Deployment on GCP VM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script_stop: true
+          script: |
+            echo "🚀 Pulling latest changes from main branch..."
+            cd ~/hhgoa
+            git pull origin main
+
+            echo "📦 Updating Python dependencies..."
+            source .venv/bin/activate
+            pip install -r requirements.txt
+
+            echo "⚛️ Building React Frontend..."
+            cd frontend
+            npm install
+            npm run build
+            cd ..
+
+            echo "🔄 Restarting FastAPI application service..."
+            sudo systemctl restart hhgoa
+
+            echo "✅ Deployment successful! Service status:"
+            sudo systemctl is-active --quiet hhgoa && echo "HH Goa Voice RAG is active and running."
