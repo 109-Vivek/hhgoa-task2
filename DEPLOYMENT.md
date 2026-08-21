@@ -125,19 +125,64 @@ Add these 3 secrets:
 | `VM_USER` | Your SSH username on the VM (e.g. `vivekkumar` or `ubuntu`) |
 | `VM_SSH_KEY` | The entire private key content (`cat ~/.ssh/github_deploy`) |
 
----
-
 ## Useful VM Management Commands
 
-```bash
-# Check FastAPI service logs
-sudo journalctl -u hhgoa -f
+### 1. Application & FastAPI Service Commands
 
-# Restart / Status of the app
-sudo systemctl restart hhgoa
-sudo systemctl status hhgoa
+* **Check live server logs** (see incoming voice queries, STT transcriptions, and responses in real-time):
+  ```bash
+  sudo journalctl -u hhgoa -f
+  ```
 
-# Check Nginx status / logs
-sudo systemctl status nginx
-sudo tail -f /var/log/nginx/error.log
-```
+* **Check service status** (verify if your FastAPI server is active and healthy):
+  ```bash
+  sudo systemctl status hhgoa
+  ```
+
+* **Restart the application** (reloads newly generated vector indices from disk into RAM):
+  ```bash
+  sudo systemctl restart hhgoa
+  ```
+
+* **Stop / Start the application**:
+  ```bash
+  sudo systemctl stop hhgoa
+  sudo systemctl start hhgoa
+  ```
+
+---
+
+### 2. Nginx Web Server Commands
+
+* **Check Nginx status**:
+  ```bash
+  sudo systemctl status nginx
+  ```
+
+* **Test Nginx configuration for syntax errors**:
+  ```bash
+  sudo nginx -t
+  ```
+
+* **View Nginx error logs**:
+  ```bash
+  sudo tail -f /var/log/nginx/error.log
+  ```
+
+---
+
+### 3. Background Indexing Session Commands (`tmux`)
+
+* **Attach to running background indexing session**:
+  ```bash
+  tmux attach -t indexing
+  ```
+
+* **Detach from tmux session** (leaves process running in background):
+  Press `Ctrl + B`, then press `D`.
+
+* **List active tmux sessions**:
+  ```bash
+  tmux ls
+  ```
+
