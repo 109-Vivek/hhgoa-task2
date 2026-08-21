@@ -75,8 +75,8 @@ source .venv/bin/activate
 # Start a tmux session
 tmux new -s indexing
 
-# Run indexing for your desired passage count (e.g., 500 passages per language)
-python -m src.indexer --languages gu hi te --limit 500 --strategy metadata_augmented
+# Run parallel indexing for all 3 hardcoded languages (gu, hi, te)
+python src/indexer.py
 
 # (To detach from tmux, press Ctrl+B, then D)
 # (To re-attach later, run: tmux attach -t indexing)
