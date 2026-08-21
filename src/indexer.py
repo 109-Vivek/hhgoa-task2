@@ -3,6 +3,7 @@ import sys
 import json
 import argparse
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from tqdm import tqdm
@@ -111,7 +112,7 @@ SAMPLE_CORPUS = {
 }
 
 
-def load_msmarco_xi_dataset(lang: str, limit: int = 500) -> List[Dict[str, Any]]:
+def load_msmarco_xi_dataset(lang: str, limit: int = 50000) -> List[Dict[str, Any]]:
     """
     Load language-specific samples from ai4bharat/MSMARCO-XI.
 
@@ -152,7 +153,10 @@ def load_msmarco_xi_dataset(lang: str, limit: int = 500) -> List[Dict[str, Any]]
             f"Supported: {', '.join(sorted(LANG_TO_FILE_PREFIX))}"
         )
 
-    parquet_filename = f"train/{prefix}train.parquet"
+    if lang == "te":
+        parquet_filename = f"validation/{prefix}val.parquet"
+    else:
+        parquet_filename = f"train/{prefix}train.parquet"
 
     try:
         from huggingface_hub import hf_hub_download
@@ -278,10 +282,10 @@ def load_msmarco_xi_dataset(lang: str, limit: int = 500) -> List[Dict[str, Any]]
 
 
 # Hardcoded Default Indexing Parameters
-DEFAULT_INDEX_LANGUAGES = ["gu", "hi", "te"]
-DEFAULT_MAX_SAMPLES = 500
+HARDCODED_LANGUAGES = ["gu", "hi", "te"]
+DEFAULT_MAX_SAMPLES = 20000
 DEFAULT_STRATEGY_NAME = "metadata_augmented"
-INDEX_BATCH_SIZE = 50
+INDEX_BATCH_SIZE = 100
 
 
 def load_checkpoint(checkpoint_path: Path) -> Dict[str, Any]:
@@ -348,6 +352,11 @@ def build_indices_for_language(
     embedder = embedder or get_embedder()
 
     # 1. Fetch raw data from stream (excluding already indexed IDs)
+    remaining_needed = limit - processed_count
+    if remaining_needed <= 0:
+        print(f"[Indexer] [COMPLETE] Target limit ({limit}) reached for '{lang}'. Skipping.")
+        return
+
     if use_sample or FORCE_SAMPLE_CORPUS:
         print(f"[Indexer] Using curated multilingual sample corpus for '{lang}'...")
         raw_items = SAMPLE_CORPUS.get(lang, SAMPLE_CORPUS.get("hi", []))
@@ -480,12 +489,14 @@ def build_indices_for_language(
 
 
 def build_all_indices(
-    languages: List[str] = DEFAULT_INDEX_LANGUAGES,
+    languages: Optional[List[str]] = None,
     limit: int = DEFAULT_MAX_SAMPLES,
     strategy_name: str = DEFAULT_STRATEGY_NAME,
     save_dir: Path = INDEX_DIR,
     use_sample: bool = False,
+    max_workers: int = 3,
 ):
+    target_languages = languages or HARDCODED_LANGUAGES
     strategy_map = {
         "atomic_passage": ChunkingStrategy.ATOMIC_PASSAGE,
         "sliding_window": ChunkingStrategy.SLIDING_WINDOW,
@@ -495,25 +506,35 @@ def build_all_indices(
     strategy = strategy_map.get(strategy_name, ChunkingStrategy.METADATA_AUGMENTED)
 
     embedder = get_embedder()
-    for lang in languages:
-        build_indices_for_language(
-            lang=lang,
-            limit=limit,
-            strategy=strategy,
-            save_dir=save_dir,
-            embedder=embedder,
-            use_sample=use_sample,
-        )
+    num_workers = min(len(target_languages), max_workers)
+    print(f"\n[Indexer] Launching parallel indexing for languages {target_languages} across {num_workers} worker threads...\n", flush=True)
+
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        futures = {
+            executor.submit(
+                build_indices_for_language,
+                lang=lang,
+                limit=limit,
+                strategy=strategy,
+                save_dir=save_dir,
+                embedder=embedder,
+                use_sample=use_sample,
+            ): lang
+            for lang in target_languages
+        }
+
+        for future in as_completed(futures):
+            lang = futures[future]
+            try:
+                future.result()
+                print(f"[Indexer] [SUCCESS] Completed pipeline for language: [{lang.upper()}]", flush=True)
+            except Exception as exc:
+                print(f"[Indexer] [ERROR] Indexing failed for language [{lang.upper()}]: {exc}", flush=True)
+                raise exc
 
 
 def main():
     parser = argparse.ArgumentParser(description="Voice Indic RAG Resumable Indexer for MSMARCO-XI")
-    parser.add_argument(
-        "--languages",
-        nargs="+",
-        default=DEFAULT_INDEX_LANGUAGES,
-        help=f"List of language codes to index (default: {' '.join(DEFAULT_INDEX_LANGUAGES)})",
-    )
     parser.add_argument(
         "--limit",
         "--max-samples",
@@ -543,7 +564,7 @@ def main():
 
     args = parser.parse_args()
     build_all_indices(
-        languages=args.languages,
+        languages=HARDCODED_LANGUAGES,
         limit=args.limit,
         strategy_name=args.strategy,
         save_dir=Path(args.index_dir),
