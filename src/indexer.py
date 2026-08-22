@@ -414,9 +414,11 @@ def build_indices_for_language(
 
         # 3. Dense Embedding (Passages)
         texts_to_embed = [c.text for c in batch_chunks]
+        print(f"  [2/5 Dense Embeddings] Computing {len(texts_to_embed)} vectors using '{embedder.model_name}' on {embedder.device}...", flush=True)
         start_embed = time.perf_counter()
         embeddings = embedder.encode(texts_to_embed, batch_size=32, show_progress_bar=False)
         embed_duration = (time.perf_counter() - start_embed) * 1000.0
+        rate = (len(texts_to_embed) / (embed_duration / 1000.0)) if embed_duration > 0 else 0
 
         metadata_list = [
             {
@@ -431,13 +433,14 @@ def build_indices_for_language(
             for c in batch_chunks
         ]
         dense_index.add(embeddings, metadata_list)
-        print(f"  [2/5 Dense Embeddings] Encoded & added {len(texts_to_embed)} vectors ({embed_duration:.1f}ms, total in index: {dense_index.count()})", flush=True)
+        print(f"  [2/5 Dense Embeddings] Done: {len(texts_to_embed)} vectors in {embed_duration:.1f}ms ({rate:.1f} vec/s | total in index: {dense_index.count()})", flush=True)
 
         # 4. Query-Anchor Dense Indexing (Dual-Track)
-        start_qa = time.perf_counter()
         query_anchors = chunker.extract_query_anchors(batch, lang=lang)
         if query_anchors:
             queries_to_embed = [qa.query for qa in query_anchors]
+            print(f"  [3/5 Query Anchors] Computing {len(queries_to_embed)} query vectors...", flush=True)
+            start_qa = time.perf_counter()
             query_embeddings = embedder.encode(queries_to_embed, batch_size=32, show_progress_bar=False)
             query_metadata_list = [
                 {
@@ -453,16 +456,9 @@ def build_indices_for_language(
             ]
             query_dense_index.add(query_embeddings, query_metadata_list)
             qa_duration = (time.perf_counter() - start_qa) * 1000.0
-            print(f"  [3/5 Query Anchors] Encoded & added {len(queries_to_embed)} query anchors ({qa_duration:.1f}ms, total query index: {query_dense_index.count()})", flush=True)
+            print(f"  [3/5 Query Anchors] Done: {len(queries_to_embed)} query anchors in {qa_duration:.1f}ms (total query index: {query_dense_index.count()})", flush=True)
         else:
-            print(f"  [3/5 Query Anchors] No query anchors present in this batch", flush=True)
-
-        # 5. BM25 Re-indexing with updated corpus
-        start_bm25 = time.perf_counter()
-        all_passage_texts = [doc.get("text", "") for doc in dense_index.metadata_store]
-        bm25_index.index_documents(all_passage_texts, dense_index.metadata_store)
-        bm25_duration = (time.perf_counter() - start_bm25) * 1000.0
-        print(f"  [4/5 BM25 Sparse] Re-indexed {len(all_passage_texts)} documents ({bm25_duration:.1f}ms)", flush=True)
+            print(f"  [3/5 Query Anchors] None present in this batch", flush=True)
 
         # Update checkpoint tracking
         for item in batch:
@@ -471,27 +467,38 @@ def build_indices_for_language(
                 indexed_ids.add(p_id)
 
         current_total = len(dense_index.metadata_store)
+        is_last_batch = (batch_idx == total_batches)
+        should_save_checkpoint = (batch_idx % 5 == 0) or is_last_batch
 
-        # 6. Save intermediate progress to disk
-        start_save = time.perf_counter()
-        dense_index.save(target_dir, index_name="faiss.index", meta_name="faiss_meta.json")
-        if query_dense_index.count() > 0:
-            query_dense_index.save(target_dir, index_name="query_faiss.index", meta_name="query_faiss_meta.json")
-        bm25_index.save(target_dir)
+        # 5. Periodic BM25 & FAISS Checkpoint Save (every 5 batches or at the end to maximize speed)
+        if should_save_checkpoint:
+            start_bm25 = time.perf_counter()
+            all_passage_texts = [doc.get("text", "") for doc in dense_index.metadata_store]
+            bm25_index.index_documents(all_passage_texts, dense_index.metadata_store)
+            bm25_duration = (time.perf_counter() - start_bm25) * 1000.0
+            print(f"  [4/5 BM25 Sparse] Indexed {len(all_passage_texts)} documents ({bm25_duration:.1f}ms)", flush=True)
 
-        save_checkpoint(
-            checkpoint_file,
-            {
-                "lang": lang,
-                "processed_count": current_total,
-                "target_limit": limit,
-                "last_updated": time.time(),
-                "status": "completed" if current_total >= limit else "in_progress",
-                "indexed_ids": list(indexed_ids),
-            },
-        )
-        save_duration = (time.perf_counter() - start_save) * 1000.0
-        print(f"  [5/5 Checkpoint & Disk Save] Saved indices to {target_dir} ({save_duration:.1f}ms) -> [{current_total}/{limit} total]", flush=True)
+            start_save = time.perf_counter()
+            dense_index.save(target_dir, index_name="faiss.index", meta_name="faiss_meta.json")
+            if query_dense_index.count() > 0:
+                query_dense_index.save(target_dir, index_name="query_faiss.index", meta_name="query_faiss_meta.json")
+            bm25_index.save(target_dir)
+
+            save_checkpoint(
+                checkpoint_file,
+                {
+                    "lang": lang,
+                    "processed_count": current_total,
+                    "target_limit": limit,
+                    "last_updated": time.time(),
+                    "status": "completed" if current_total >= limit else "in_progress",
+                    "indexed_ids": list(indexed_ids),
+                },
+            )
+            save_duration = (time.perf_counter() - start_save) * 1000.0
+            print(f"  [5/5 Checkpoint & Disk Save] Persisted indices -> [{current_total}/{limit} items] ({save_duration:.1f}ms)", flush=True)
+        else:
+            print(f"  [4/5 & 5/5] In-memory buffered [{current_total}/{limit} items] (will checkpoint at batch {(batch_idx // 5 + 1) * 5})", flush=True)
 
     print(f"\n[Indexer] [SUCCESS] Completed indexing {dense_index.count()} passages & {query_dense_index.count()} query anchors for '{lang}'.\n", flush=True)
 
@@ -502,7 +509,7 @@ def build_all_indices(
     strategy_name: str = DEFAULT_STRATEGY_NAME,
     save_dir: Path = INDEX_DIR,
     use_sample: bool = False,
-    max_workers: int = 3,
+    max_workers: Optional[int] = None,
 ):
     target_languages = languages or HARDCODED_LANGUAGES
     strategy_map = {
@@ -514,31 +521,53 @@ def build_all_indices(
     strategy = strategy_map.get(strategy_name, ChunkingStrategy.METADATA_AUGMENTED)
 
     embedder = get_embedder()
+    
+    # On CPU, default to sequential (1 worker) to prevent PyTorch thread contention and GIL stalls
+    if max_workers is None:
+        max_workers = 1 if embedder.device == "cpu" else min(len(target_languages), 3)
+
     num_workers = min(len(target_languages), max_workers)
-    print(f"\n[Indexer] Launching parallel indexing for languages {target_languages} across {num_workers} worker threads...\n", flush=True)
-
-    with ThreadPoolExecutor(max_workers=num_workers) as executor:
-        futures = {
-            executor.submit(
-                build_indices_for_language,
-                lang=lang,
-                limit=limit,
-                strategy=strategy,
-                save_dir=save_dir,
-                embedder=embedder,
-                use_sample=use_sample,
-            ): lang
-            for lang in target_languages
-        }
-
-        for future in as_completed(futures):
-            lang = futures[future]
+    
+    if num_workers == 1:
+        print(f"\n[Indexer] Running sequential indexing for languages {target_languages} on {embedder.device.upper()} (optimal throughput & memory stability)...\n", flush=True)
+        for lang in target_languages:
             try:
-                future.result()
+                build_indices_for_language(
+                    lang=lang,
+                    limit=limit,
+                    strategy=strategy,
+                    save_dir=save_dir,
+                    embedder=embedder,
+                    use_sample=use_sample,
+                )
                 print(f"[Indexer] [SUCCESS] Completed pipeline for language: [{lang.upper()}]", flush=True)
             except Exception as exc:
                 print(f"[Indexer] [ERROR] Indexing failed for language [{lang.upper()}]: {exc}", flush=True)
                 raise exc
+    else:
+        print(f"\n[Indexer] Launching parallel indexing for languages {target_languages} across {num_workers} worker threads...\n", flush=True)
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            futures = {
+                executor.submit(
+                    build_indices_for_language,
+                    lang=lang,
+                    limit=limit,
+                    strategy=strategy,
+                    save_dir=save_dir,
+                    embedder=embedder,
+                    use_sample=use_sample,
+                ): lang
+                for lang in target_languages
+            }
+
+            for future in as_completed(futures):
+                lang = futures[future]
+                try:
+                    future.result()
+                    print(f"[Indexer] [SUCCESS] Completed pipeline for language: [{lang.upper()}]", flush=True)
+                except Exception as exc:
+                    print(f"[Indexer] [ERROR] Indexing failed for language [{lang.upper()}]: {exc}", flush=True)
+                    raise exc
 
 
 def main():
@@ -569,6 +598,12 @@ def main():
         default=str(INDEX_DIR),
         help="Directory to save the built indices",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of parallel worker threads (default: 1 on CPU, up to 3 on GPU)",
+    )
 
     args = parser.parse_args()
     build_all_indices(
@@ -577,6 +612,7 @@ def main():
         strategy_name=args.strategy,
         save_dir=Path(args.index_dir),
         use_sample=args.use_sample,
+        max_workers=args.workers,
     )
 
 
