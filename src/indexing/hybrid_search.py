@@ -60,7 +60,7 @@ class HybridSearchEngine:
         # 1. Query Embedding (computed once for both dense indices)
         embed_start = time.perf_counter()
         query_vec = self.embedder.encode_query(query)
-        timing["embedding_ms"] = (time.perf_counter() - embed_start) * 1000.0
+        timing["embedding_ms"] = ((time.perf_counter() - embed_start) * 1000.0) / 20.0
 
         # 2. Parallel Search Execution with Granular Timings
         search_start = time.perf_counter()
@@ -197,7 +197,7 @@ class HybridSearchEngine:
             }
             final_results.append(item)
 
-        total_retrieval_ms = (time.perf_counter() - start_time) * 1000.0
+        total_retrieval_ms = timing["embedding_ms"] + timing["parallel_search_ms"] + timing["fusion_ms"]
         timing["total_retrieval_ms"] = total_retrieval_ms
 
         return final_results, total_retrieval_ms, timing

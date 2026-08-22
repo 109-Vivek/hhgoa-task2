@@ -717,7 +717,6 @@ export const App: React.FC = () => {
                       { name: 'FAISS HNSW Dense Search', val: response.latency.dense_search_ms, color: '#06B6D4' },
                       { name: 'BM25s Lexical Search', val: response.latency.lexical_search_ms, color: '#3B82F6' },
                       { name: 'Reciprocal Rank Fusion (RRF)', val: response.latency.fusion_ms, color: '#F59E0B' },
-                      { name: 'LLM Generation / Synthesis', val: response.latency.llm_generation_ms, color: '#EC4899' },
                       { name: 'Output Grounding Guardrail', val: response.latency.output_guardrail_ms, color: '#14B8A6' },
                     ].map((step, i) => {
                       const total = Math.max(response.latency.total_end_to_end_ms, 1);

@@ -98,7 +98,7 @@ def run_benchmark(
     # Collect query list
     query_queue = []
     for lang in languages:
-        lang_queries = BENCHMARK_QUERIES.get(lang, BENCHMARK_QUERIES["en"])
+        lang_queries = BENCHMARK_QUERIES.get(lang, [])
         for q in lang_queries:
             query_queue.append((q, lang))
 
