@@ -72,13 +72,14 @@ You can run the indexing script in a persistent `tmux` session on the VM so it k
 cd ~/hhgoa
 source .venv/bin/activate
 
-# Start a tmux session
-tmux new -s indexing
+# Start a tmux session (explicitly with bash)
+tmux new -s indexing /bin/bash
 
-# Run parallel indexing for all 3 hardcoded languages (gu, hi, te)
-python src/indexer.py
+# Run parallel indexing with live output piped to persistent log file
+python src/indexer.py 2>&1 | tee indexing.log
 
 # (To detach from tmux, press Ctrl+B, then D)
+# (To monitor logs from outside tmux: tail -f indexing.log)
 # (To re-attach later, run: tmux attach -t indexing)
 ```
 
@@ -173,6 +174,11 @@ Add these 3 secrets:
 
 ### 3. Background Indexing Session Commands (`tmux`)
 
+* **Start a new session cleanly**:
+  ```bash
+  tmux new -s indexing /bin/bash
+  ```
+
 * **Attach to running background indexing session**:
   ```bash
   tmux attach -t indexing
@@ -186,13 +192,31 @@ Add these 3 secrets:
   tmux ls
   ```
 
-* **Kill a specific tmux session** (stop the background indexing process):
+* **View live indexing logs outside tmux**:
+  ```bash
+  tail -f indexing.log
+  ```
+
+* **Dump / Export entire tmux session scrollback logs to terminal or file**:
+  ```bash
+  # Print full history to stdout
+  tmux capture-pane -S - -p -t indexing
+
+  # Export full history to a log file
+  tmux capture-pane -S - -p -t indexing > indexing.log
+  ```
+
+* **Scroll history interactively inside tmux**:
+  1. Press `Ctrl + B`, then press `[` (enters Scroll / Copy mode).
+  2. Use **Up/Down arrows** or **Page Up / Page Down** to browse full output.
+  3. Press `q` to exit scroll mode.
+
+* **Kill a specific tmux session** (stops background indexing):
   ```bash
   tmux kill-session -t indexing
   ```
 
-* **Kill all tmux sessions & tmux server**:
+* **Kill all tmux sessions & tmux server** (fixes stale socket issues):
   ```bash
   tmux kill-server
   ```
-
