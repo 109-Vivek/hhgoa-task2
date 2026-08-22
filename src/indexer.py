@@ -291,7 +291,7 @@ def load_msmarco_xi_dataset(lang: str, limit: int = 50000) -> List[Dict[str, Any
 
 # Hardcoded Default Indexing Parameters
 HARDCODED_LANGUAGES = ["gu", "hi", "te"]
-DEFAULT_MAX_SAMPLES = 20000
+DEFAULT_MAX_SAMPLES = 5000
 DEFAULT_STRATEGY_NAME = "metadata_augmented"
 INDEX_BATCH_SIZE = 100
 

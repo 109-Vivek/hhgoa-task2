@@ -62,22 +62,42 @@ class HybridSearchEngine:
         query_vec = self.embedder.encode_query(query)
         timing["embedding_ms"] = (time.perf_counter() - embed_start) * 1000.0
 
-        # 2. Parallel Search Execution
+        # 2. Parallel Search Execution with Granular Timings
         search_start = time.perf_counter()
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            future_passage = executor.submit(self.dense_index.search, query_vec, top_k * 2)
-            
-            future_query = None
+        
+        def timed_dense():
+            t0 = time.perf_counter()
+            res = self.dense_index.search(query_vec, top_k * 2)
+            return res, (time.perf_counter() - t0) * 1000.0
+
+        def timed_query():
             if self.query_dense_index and self.query_dense_index.count() > 0:
-                future_query = executor.submit(self.query_dense_index.search, query_vec, top_k * 2)
+                t0 = time.perf_counter()
+                res = self.query_dense_index.search(query_vec, top_k * 2)
+                return res, (time.perf_counter() - t0) * 1000.0
+            return [], 0.0
 
-            future_lexical = executor.submit(self.lexical_index.search, query, top_k * 2)
+        def timed_lexical():
+            t0 = time.perf_counter()
+            res = self.lexical_index.search(query, top_k * 2)
+            return res, (time.perf_counter() - t0) * 1000.0
 
-            passage_dense_results = future_passage.result()
-            query_anchor_results = future_query.result() if future_query else []
-            lexical_results = future_lexical.result()
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            future_passage = executor.submit(timed_dense)
+            future_query = executor.submit(timed_query)
+            future_lexical = executor.submit(timed_lexical)
 
+            passage_dense_results, dense_time_ms = future_passage.result()
+            query_anchor_results, qa_time_ms = future_query.result()
+            lexical_results, lexical_time_ms = future_lexical.result()
+
+        timing["dense_search_ms"] = dense_time_ms
+        timing["query_anchor_search_ms"] = qa_time_ms
+        timing["lexical_search_ms"] = lexical_time_ms
         timing["parallel_search_ms"] = (time.perf_counter() - search_start) * 1000.0
+        timing["dense_result_count"] = len(passage_dense_results)
+        timing["query_anchor_result_count"] = len(query_anchor_results)
+        timing["lexical_result_count"] = len(lexical_results)
 
         # 3. Tri-Track Reciprocal Rank Fusion (RRF) & Passage Deduplication
         fusion_start = time.perf_counter()
