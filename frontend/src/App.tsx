@@ -427,6 +427,9 @@ export const App: React.FC = () => {
           <span className="badge badge-cyan" style={{ marginLeft: 8 }}>
             FAISS HNSW + BM25s
           </span>
+          <a href="/process.html" className="process-film-link">
+            90s Process <span>↗</span>
+          </a>
         </div>
       </header>
 

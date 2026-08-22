@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07090e" />
+    <title>Indic Voice-RAG | The 90 Second Process</title>
+    <link rel="stylesheet" href="./process.css" />
+  </head>
+  <body>
+    <main class="process-film" aria-live="polite">
+      <div class="grid-glow" aria-hidden="true"></div>
+      <div class="particle-field" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+      <header class="film-header">
+        <a class="brand-mark" href="/" aria-label="Back to Indic Voice-RAG">
+          <span class="brand-orbit"><span></span></span>
+          <span>Indic <strong>Voice-RAG</strong></span>
+        </a>
+        <div class="header-meta">
+          <span class="live-dot"></span>
+          <span>PROCESS FILM</span>
+          <span class="header-rule"></span>
+          <span>HH GOA 2026</span>
+        </div>
+      </header>
+
+      <section class="intro scene" data-start="0" data-end="9">
+        <p class="eyebrow">One system. Two carefully timed paths.</p>
+        <h1>From <span class="gradient-text">voice</span><br />to grounded answer.</h1>
+        <p class="intro-copy">A 90-second look at how the knowledge base is prepared offline, then served online as a fast, grounded answer.</p>
+        <div class="intro-signal"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <p class="scroll-note">THE PIPELINE IS LIVE <b>↓</b></p>
+      </section>
+
+      <section class="architecture scene" data-start="9" data-end="22" aria-label="Offline and online system architecture">
+        <div class="architecture-heading">
+          <p class="eyebrow">System architecture</p>
+          <h2>Build the memory.<br /><span class="gradient-text">Serve the answer.</span></h2>
+          <p>Prepare knowledge once. Reuse it for every live answer.</p>
+        </div>
+        <div class="architecture-board">
+          <div class="architecture-lane offline-lane">
+            <div class="lane-heading"><span class="lane-icon">01</span><strong>OFFLINE BUILD</strong><small>PREPARE ONCE</small></div>
+            <div class="architecture-flow">
+              <div class="architecture-box source-box"><b>DATASET</b><small>MSMARCO-XI batches</small></div><span class="flow-arrow">→</span>
+              <div class="architecture-box chunk-box"><b>CHUNKS</b><small>atomic + windows</small></div><span class="flow-arrow">→</span>
+              <div class="architecture-box embed-box"><b>EMBEDDINGS</b><small>BGE-M3 vectors</small></div><span class="flow-arrow">→</span>
+              <div class="architecture-box store-box"><b>SAVED INDEXES</b><small>FAISS + BM25s</small></div>
+            </div>
+            <div class="lane-foot validation-foot"><span>✓</span> OFFLINE VALIDATION: chunks, vectors, metadata, and checkpoints verified</div>
+          </div>
+          <div class="architecture-divider"><span>PERSISTED ON DISK</span></div>
+          <div class="architecture-lane online-lane">
+            <div class="lane-heading"><span class="lane-icon">02</span><strong>ONLINE ANSWER</strong><small>RESPOND LIVE</small></div>
+            <div class="architecture-flow">
+              <div class="architecture-box voice-box"><b>VOICE</b><small>Sarvam STT</small></div><span class="flow-arrow">→</span>
+              <div class="architecture-box guard-box"><b>SAFE QUERY</b><small>input guardrail</small></div><span class="flow-arrow">→</span>
+              <div class="architecture-box retrieve-box"><b>RETRIEVE</b><small>FAISS + BM25s</small></div><span class="flow-arrow">→</span>
+              <div class="architecture-box answer-box-small"><b>GROUNDED ANSWER</b><small>LLM + output check</small></div>
+            </div>
+            <div class="lane-foot validation-foot"><span>✓</span> ONLINE VALIDATION: guardrails, grounding, abstention, and &lt;200ms target checked</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="stage-map scene" data-start="22" data-end="82" aria-label="Animated pipeline stages">
+        <div class="stage-copy">
+          <p class="stage-kicker"><span class="stage-number">01</span><span class="stage-type">INPUT</span></p>
+          <h2 id="stage-title">A voice enters.<br /><em>Meaning emerges.</em></h2>
+          <p id="stage-description">The indexer reads the knowledge source in batches and prepares it before any user request arrives.</p>
+          <div class="stage-tags" id="stage-tags"><span>OFFLINE</span><span>ONLINE</span><span>RAG</span><span>GROUNDED</span></div>
+        </div>
+
+        <div class="pipeline-visual">
+          <div class="visual-orbit orbit-one"></div>
+          <div class="visual-orbit orbit-two"></div>
+          <div class="core-node"><span class="core-pulse"></span><span class="core-label">RAG<br /><b>CORE</b></span></div>
+          <div class="signal-line line-a"><span></span></div>
+          <div class="signal-line line-b"><span></span></div>
+          <div class="signal-line line-c"><span></span></div>
+          <div class="signal-line line-d"><span></span></div>
+          <div class="stage-node node-a" data-node="0"><b>01</b><span>INGEST</span></div>
+          <div class="stage-node node-b" data-node="1"><b>02</b><span>CHUNK</span></div>
+          <div class="stage-node node-c" data-node="2"><b>03</b><span>EMBED</span></div>
+          <div class="stage-node node-d" data-node="3"><b>04</b><span>STORE</span></div>
+          <div class="stage-node node-e" data-node="4"><b>05</b><span>ANSWER</span></div>
+          <div class="node-caption"><span class="caption-dot"></span><span id="node-caption-text">Offline build · raw knowledge enters</span></div>
+        </div>
+
+        <div class="stage-details">
+          <div class="detail-label">CURRENT OPERATION</div>
+          <strong id="detail-operation">Listening &amp; language detection</strong>
+          <div class="latency-readout"><span id="stage-latency">50</span><small>MS TARGET</small></div>
+          <div class="detail-status"><span class="status-check">✓</span><span id="detail-status-text">Audio signal acquired</span></div>
+        </div>
+      </section>
+
+      <section class="outro scene" data-start="82" data-end="90">
+        <div class="answer-beacon"><span></span><span></span><span></span><b>✓</b></div>
+        <p class="eyebrow">The answer arrives with receipts</p>
+        <h2>Fast enough to feel<br /><span class="gradient-text">like a conversation.</span></h2>
+        <p class="outro-copy">Every response uses persisted evidence, runs through the online pipeline, and is checked before it reaches you.</p>
+        <div class="final-metrics"><span><b>&lt;200</b><small>MS TARGET</small></span><i></i><span><b>2</b><small>PIPELINES</small></span><i></i><span><b>1</b><small>GROUNDED ANSWER</small></span></div>
+        <a class="launch-button" href="/">EXPLORE THE LIVE RAG <span>↗</span></a>
+      </section>
+
+      <footer class="film-controls">
+        <div class="timecode"><span id="time-current">00:00</span><span>/</span><span id="time-total">01:30</span></div>
+        <div class="timeline" role="slider" aria-label="Process film progress" aria-valuemin="0" aria-valuemax="90" aria-valuenow="0" tabindex="0"><span id="timeline-progress"></span><i id="timeline-scrubber"></i></div>
+        <div class="control-buttons"><button id="play-toggle" type="button" aria-label="Pause process film">Ⅱ</button><button id="replay" type="button" aria-label="Replay process film">↻</button><button id="motion-toggle" type="button" aria-label="Toggle reduced motion">◌</button></div>
+      </footer>
+    </main>
+    <script src="./process.js"></script>
+  </body>
+</html>

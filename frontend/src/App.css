@@ -49,6 +49,25 @@
   box-shadow: 0 0 10px var(--accent-green);
 }
 
+.process-film-link {
+  color: var(--accent-cyan);
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+
+.process-film-link span {
+  color: var(--accent-saffron);
+  font-size: 1rem;
+}
+
+.process-film-link:hover {
+  color: var(--text-primary);
+}
+
 /* Nav Tabs */
 .tabs-nav {
   display: flex;
