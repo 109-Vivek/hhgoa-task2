@@ -50,16 +50,8 @@ class ResilientLLMClient:
                 "answer": refusal_msg,
                 "provider": "guardrail_abstention",
                 "latency_ms": elapsed_ms,
-            }
-
-        # If FORCE_LLM_MOCK is set, directly use local grounded synthesizer
-        if FORCE_LLM_MOCK:
-            fallback_answer = self._generate_extractive_grounded_answer(query, retrieved_contexts, lang)
-            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-            return {
-                "answer": fallback_answer,
-                "provider": "local_mock_harness",
-                "latency_ms": elapsed_ms,
+                "system_prompt": "N/A (Abstention Guardrail Triggered before LLM generation)",
+                "user_prompt": f"User Query: {query} (No context / Low similarity)",
             }
 
         # Build context prompt
@@ -82,6 +74,18 @@ class ResilientLLMClient:
 
         user_prompt = f"Retrieved Context:\n{context_str}\n\nUser Question: {query}\n\nAnswer:"
 
+        # If FORCE_LLM_MOCK is set, directly use local grounded synthesizer
+        if FORCE_LLM_MOCK:
+            fallback_answer = self._generate_extractive_grounded_answer(query, retrieved_contexts, lang)
+            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+            return {
+                "answer": fallback_answer,
+                "provider": "local_mock_harness",
+                "latency_ms": elapsed_ms,
+                "system_prompt": system_prompt,
+                "user_prompt": user_prompt,
+            }
+
         # Try Providers in order, respecting PRIMARY_LLM_PROVIDER first
         provider_attempts = []
         if PRIMARY_LLM_PROVIDER == "gemini":
@@ -97,6 +101,8 @@ class ResilientLLMClient:
             res = self._call_xai(xai_key, system_prompt, user_prompt)
             if res:
                 res["latency_ms"] = (time.perf_counter() - start_time) * 1000.0
+                res["system_prompt"] = system_prompt
+                res["user_prompt"] = user_prompt
                 return res
 
         for provider in provider_attempts:
@@ -105,6 +111,8 @@ class ResilientLLMClient:
                     res = self._call_gemini(system_prompt, user_prompt)
                     if res:
                         res["latency_ms"] = (time.perf_counter() - start_time) * 1000.0
+                        res["system_prompt"] = system_prompt
+                        res["user_prompt"] = user_prompt
                         return res
 
             elif provider == "groq" and "groq" not in self.disabled_providers:
@@ -112,6 +120,8 @@ class ResilientLLMClient:
                     res = self._call_groq(system_prompt, user_prompt)
                     if res:
                         res["latency_ms"] = (time.perf_counter() - start_time) * 1000.0
+                        res["system_prompt"] = system_prompt
+                        res["user_prompt"] = user_prompt
                         return res
 
             elif provider == "openai" and "openai" not in self.disabled_providers:
@@ -119,6 +129,8 @@ class ResilientLLMClient:
                     res = self._call_openai(system_prompt, user_prompt)
                     if res:
                         res["latency_ms"] = (time.perf_counter() - start_time) * 1000.0
+                        res["system_prompt"] = system_prompt
+                        res["user_prompt"] = user_prompt
                         return res
 
         # If live LLM calls failed and fallback is disabled, raise error
@@ -132,6 +144,8 @@ class ResilientLLMClient:
             "answer": fallback_answer,
             "provider": "local_indic_harness",
             "latency_ms": elapsed_ms,
+            "system_prompt": system_prompt,
+            "user_prompt": user_prompt,
         }
 
     def _call_groq(self, system_prompt: str, user_prompt: str) -> Optional[Dict[str, Any]]:

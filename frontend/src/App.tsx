@@ -15,7 +15,20 @@ import {
   Upload, 
   Zap,
   Globe,
-  RefreshCw
+  RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  Terminal,
+  Search,
+  FileText,
+  CheckCircle,
+  XCircle,
+  Cpu,
+  Database,
+  Sliders,
+  Volume2,
+  Copy,
+  Check
 } from 'lucide-react';
 import './App.css';
 
@@ -42,6 +55,15 @@ interface LatencyBreakdown {
   total_end_to_end_ms: number;
 }
 
+interface PipelineTraceStep {
+  step_num: number;
+  step_id: string;
+  step_name: string;
+  time_ms: number;
+  status: string;
+  details: Record<string, any>;
+}
+
 interface PipelineResponse {
   query: string;
   detected_lang: string;
@@ -64,6 +86,7 @@ interface PipelineResponse {
   latency: LatencyBreakdown;
   is_abstention: boolean;
   provider: string;
+  pipeline_trace?: PipelineTraceStep[];
 }
 
 interface BackendStatus {
@@ -116,6 +139,65 @@ export const App: React.FC = () => {
   const [benchmarkResult, setBenchmarkResult] = useState<BenchmarkReport | null>(null);
   const [isBenchmarking, setIsBenchmarking] = useState<boolean>(false);
   const [benchQueriesCount, setBenchQueriesCount] = useState<number>(15);
+
+  // Trace State
+  const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
+  const [copiedStep, setCopiedStep] = useState<number | null>(null);
+
+  const toggleStep = (stepNum: number) => {
+    setExpandedSteps((prev) => ({
+      ...prev,
+      [stepNum]: !prev[stepNum],
+    }));
+  };
+
+  const expandAllSteps = () => {
+    if (!response?.pipeline_trace) return;
+    const all: Record<number, boolean> = {};
+    response.pipeline_trace.forEach((s) => {
+      all[s.step_num] = true;
+    });
+    setExpandedSteps(all);
+  };
+
+  const collapseAllSteps = () => {
+    setExpandedSteps({});
+  };
+
+  const copyToClipboard = (text: string, stepNum: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedStep(stepNum);
+    setTimeout(() => setCopiedStep(null), 2000);
+  };
+
+  const getStepIcon = (stepId: string) => {
+    switch (stepId) {
+      case 'language_detection':
+        return <Globe size={18} color="#00F2FE" />;
+      case 'stt_transcription':
+        return <Volume2 size={18} color="#FF6B35" />;
+      case 'input_guardrail':
+        return <ShieldCheck size={18} color="#10B981" />;
+      case 'query_embedding':
+        return <Cpu size={18} color="#8B5CF6" />;
+      case 'dense_search':
+        return <Search size={18} color="#06B6D4" />;
+      case 'lexical_search':
+        return <FileText size={18} color="#3B82F6" />;
+      case 'rrf_fusion':
+        return <Sliders size={18} color="#F59E0B" />;
+      case 'final_chunks':
+        return <Database size={18} color="#EC4899" />;
+      case 'final_prompt':
+        return <Terminal size={18} color="#A78BFA" />;
+      case 'llm_output':
+        return <Sparkles size={18} color="#FF6B35" />;
+      case 'output_guardrail':
+        return <CheckCircle2 size={18} color="#14B8A6" />;
+      default:
+        return <Activity size={18} color="#00F2FE" />;
+    }
+  };
 
   // Fetch initial system status
   useEffect(() => {
@@ -690,6 +772,202 @@ export const App: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* SECTION: Pipeline Execution Trace (11 Granular Stages with Latencies) */}
+              {response.pipeline_trace && response.pipeline_trace.length > 0 && (
+                <div className="glass-panel trace-container" style={{ marginTop: 24 }}>
+                  <div className="trace-main-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Activity size={22} color="var(--accent-cyan)" />
+                      <div>
+                        <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>
+                          Pipeline Execution Trace &amp; Inspection
+                        </h3>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                          Step-by-step intermediate execution trace from audio / query ingestion to output guardrails ({response.pipeline_trace.length} stages)
+                        </p>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        className="btn-secondary"
+                        onClick={expandAllSteps}
+                        style={{ fontSize: '0.78rem', padding: '5px 10px' }}
+                      >
+                        Expand All
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        onClick={collapseAllSteps}
+                        style={{ fontSize: '0.78rem', padding: '5px 10px' }}
+                      >
+                        Collapse All
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="trace-timeline">
+                    {response.pipeline_trace.map((step) => {
+                      const isExpanded = !!expandedSteps[step.step_num];
+                      const isPassed = step.status === 'passed' || step.status === 'completed';
+                      const isBlocked = step.status === 'blocked' || step.status === 'failed';
+                      const isFlagged = step.status === 'flagged' || step.status === 'warning';
+                      const isAbstention = step.status === 'abstention';
+
+                      return (
+                        <div key={step.step_num} className={`trace-step-card ${isExpanded ? 'expanded' : ''}`}>
+                          {/* Step Header Bar */}
+                          <div
+                            className="trace-step-header"
+                            onClick={() => toggleStep(step.step_num)}
+                          >
+                            <div className="trace-step-left">
+                              <span className="trace-step-num-badge">{step.step_num}</span>
+                              <div className="trace-step-icon">{getStepIcon(step.step_id)}</div>
+                              <span className="trace-step-title">{step.step_name}</span>
+                            </div>
+
+                            <div className="trace-step-right">
+                              {/* Status Badge */}
+                              <span
+                                className={`badge ${
+                                  isBlocked
+                                    ? 'badge-red'
+                                    : isFlagged
+                                    ? 'badge-orange'
+                                    : isAbstention
+                                    ? 'badge-purple'
+                                    : 'badge-green'
+                                }`}
+                                style={{ textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: 0.5 }}
+                              >
+                                {isBlocked && <XCircle size={12} style={{ marginRight: 4 }} />}
+                                {isPassed && <CheckCircle size={12} style={{ marginRight: 4 }} />}
+                                {isFlagged && <AlertTriangle size={12} style={{ marginRight: 4 }} />}
+                                {step.status}
+                              </span>
+
+                              {/* Timing Badge */}
+                              <span className="trace-step-time">
+                                <Clock size={12} style={{ marginRight: 4 }} />
+                                {step.time_ms.toFixed(2)} ms
+                              </span>
+
+                              {/* Chevron */}
+                              <div className="trace-chevron">
+                                {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Step Detailed Drawer */}
+                          {isExpanded && (
+                            <div className="trace-step-body animate-fade-in">
+                              {/* Custom rendering based on step_id */}
+                              {step.step_id === 'final_prompt' && (
+                                <div className="trace-prompt-view">
+                                  <div className="trace-prompt-section">
+                                    <div className="trace-prompt-header">
+                                      <span>⚙️ System Prompt:</span>
+                                      <button
+                                        className="trace-copy-btn"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          copyToClipboard(step.details.system_prompt || '', step.step_num);
+                                        }}
+                                      >
+                                        {copiedStep === step.step_num ? <Check size={12} /> : <Copy size={12} />}
+                                        <span>{copiedStep === step.step_num ? 'Copied' : 'Copy'}</span>
+                                      </button>
+                                    </div>
+                                    <pre className="trace-code-block">{step.details.system_prompt}</pre>
+                                  </div>
+
+                                  <div className="trace-prompt-section" style={{ marginTop: 12 }}>
+                                    <div className="trace-prompt-header">
+                                      <span>💬 User Prompt (Context + Question):</span>
+                                      <button
+                                        className="trace-copy-btn"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          copyToClipboard(step.details.user_prompt || '', step.step_num + 100);
+                                        }}
+                                      >
+                                        {copiedStep === step.step_num + 100 ? <Check size={12} /> : <Copy size={12} />}
+                                        <span>{copiedStep === step.step_num + 100 ? 'Copied' : 'Copy'}</span>
+                                      </button>
+                                    </div>
+                                    <pre className="trace-code-block">{step.details.user_prompt}</pre>
+                                  </div>
+                                </div>
+                              )}
+
+                              {step.step_id === 'final_chunks' && (
+                                <div className="trace-chunks-view">
+                                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 8 }}>
+                                    Retrieved <strong>{step.details.chunks_count}</strong> passages (Max Similarity: {step.details.max_similarity_score}):
+                                  </div>
+                                  <div className="trace-chunks-grid">
+                                    {step.details.chunks && step.details.chunks.map((c: any, i: number) => (
+                                      <div key={i} className="trace-chunk-card">
+                                        <div className="trace-chunk-header">
+                                          <span style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                                            #{c.rank} • Doc: {c.passage_id}
+                                          </span>
+                                          <div style={{ display: 'flex', gap: 4 }}>
+                                            <span className="badge badge-green" style={{ fontSize: '0.68rem' }}>
+                                              Cosine: {c.dense_score}
+                                            </span>
+                                            <span className="badge badge-cyan" style={{ fontSize: '0.68rem' }}>
+                                              RRF: {c.rrf_score}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="trace-chunk-sources">
+                                          {c.match_sources && c.match_sources.map((src: string, si: number) => (
+                                            <span key={si} className="trace-source-tag">🏷️ {src}</span>
+                                          ))}
+                                        </div>
+                                        <p className="trace-chunk-preview">"{c.text_preview}"</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {step.step_id !== 'final_prompt' && step.step_id !== 'final_chunks' && (
+                                <div className="trace-meta-table-wrap">
+                                  <table className="trace-meta-table">
+                                    <tbody>
+                                      {Object.entries(step.details).map(([key, val]) => (
+                                        <tr key={key}>
+                                          <td className="trace-meta-key">{key.replace(/_/g, ' ')}</td>
+                                          <td className="trace-meta-val">
+                                            {typeof val === 'object' && val !== null ? (
+                                              <pre className="trace-inline-json">{JSON.stringify(val, null, 2)}</pre>
+                                            ) : typeof val === 'boolean' ? (
+                                              <span style={{ fontWeight: 700, color: val ? '#10B981' : '#EF4444' }}>
+                                                {val ? 'TRUE (PASSED)' : 'FALSE (FAILED)'}
+                                              </span>
+                                            ) : (
+                                              String(val)
+                                            )}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
