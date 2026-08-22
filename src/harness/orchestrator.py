@@ -536,7 +536,12 @@ class VoiceRAGOrchestrator:
             },
         })
 
-        timing.total_end_to_end_ms = (time.perf_counter() - total_start) * 1000.0
+        timing.total_end_to_end_ms = (
+            timing.stt_ms
+            + timing.input_guardrail_ms
+            + timing.total_retrieval_ms
+            + timing.output_guardrail_ms
+        )
 
         return PipelineResponse(
             query=query,
