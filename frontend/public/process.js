@@ -33,10 +33,26 @@
   var elapsed = 0;
   var playing = true;
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var soundEnabled = false;
+  var soundContext = null;
+  var soundMaster = null;
+  var lastSoundStage = -1;
+  var soundButton = document.getElementById('sound-toggle');
   var last = performance.now();
   var storyboardDuration = 90;
 
   function formatTime(value) { var seconds = Math.max(0, Math.floor(value)); var minutes = Math.floor(seconds / 60); var remainder = seconds % 60; return String(minutes).padStart(2, '0') + ':' + String(remainder).padStart(2, '0'); }
+  function startSound() {
+    var AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) { soundButton.textContent = 'N/A'; return; }
+    if (soundContext) { soundContext.resume(); return; }
+    soundContext = new AudioContext(); soundMaster = soundContext.createGain(); soundMaster.gain.value = .05; soundMaster.connect(soundContext.destination);
+    var oscillator = soundContext.createOscillator(); var ambientGain = soundContext.createGain(); oscillator.type = 'sine'; oscillator.frequency.value = 110; ambientGain.gain.value = .14; oscillator.connect(ambientGain); ambientGain.connect(soundMaster); oscillator.start();
+  }
+  function playStageTone(stageIndex) {
+    if (!soundEnabled || !soundContext || stageIndex === lastSoundStage) return;
+    lastSoundStage = stageIndex; var oscillator = soundContext.createOscillator(); var gain = soundContext.createGain(); oscillator.type = 'sine'; oscillator.frequency.value = 220 + stageIndex * 42; gain.gain.setValueAtTime(.0001, soundContext.currentTime); gain.gain.exponentialRampToValueAtTime(.12, soundContext.currentTime + .025); gain.gain.exponentialRampToValueAtTime(.0001, soundContext.currentTime + .42); oscillator.connect(gain); gain.connect(soundMaster); oscillator.start(); oscillator.stop(soundContext.currentTime + .45);
+  }
   function activateScene(time) { Array.prototype.forEach.call(scenes, function (scene) { scene.classList.toggle('active', time >= Number(scene.dataset.start) && time < Number(scene.dataset.end)); }); }
   function updateStage(time) {
     var item = stages.find(function (stage) { return time >= stage.start && time < stage.end; });
@@ -46,13 +62,15 @@
     Array.prototype.forEach.call(nodes, function (node) { node.classList.toggle('active', Number(node.dataset.node) === item.node); });
     var stageIndex = stages.indexOf(item);
     stageMap.classList.toggle('right-animation-layout', stageIndex >= 1);
+    playStageTone(stageIndex);
   }
   function render(time) { elapsed = Math.max(0, Math.min(duration, time)); var storyboardTime = elapsed / duration * storyboardDuration; activateScene(storyboardTime); updateStage(storyboardTime); progress.style.width = (elapsed / duration * 100) + '%'; scrubber.style.left = (elapsed / duration * 100) + '%'; current.textContent = formatTime(elapsed); total.textContent = formatTime(duration); film.setAttribute('data-reduced-motion', reduced ? 'true' : 'false'); }
   function tick(now) { var delta = (now - last) / 1000; last = now; if (playing && !reduced) { render(elapsed + delta); if (elapsed >= duration) { playing = false; render(duration); play.textContent = '▶'; } } requestAnimationFrame(tick); }
   function seek(event) { var rect = event.currentTarget.getBoundingClientRect(); render((event.clientX - rect.left) / rect.width * duration); }
 
   play.addEventListener('click', function () { playing = !playing; play.textContent = playing ? 'Ⅱ' : '▶'; last = performance.now(); });
-  document.getElementById('replay').addEventListener('click', function () { render(0); playing = true; play.textContent = 'Ⅱ'; last = performance.now(); });
+  soundButton.addEventListener('click', function () { soundEnabled = !soundEnabled; soundButton.classList.toggle('active', soundEnabled); soundButton.textContent = soundEnabled ? 'SOUND ON' : 'SOUND'; if (soundEnabled) { startSound(); lastSoundStage = -1; render(elapsed); } });
+  document.getElementById('replay').addEventListener('click', function () { render(0); lastSoundStage = -1; playing = true; play.textContent = 'Ⅱ'; last = performance.now(); });
   document.getElementById('motion-toggle').addEventListener('click', function (event) { reduced = !reduced; event.currentTarget.classList.toggle('active', reduced); if (reduced) render(elapsed); });
   document.querySelector('.timeline').addEventListener('click', seek);
   document.querySelector('.timeline').addEventListener('keydown', function (event) { if (event.key === 'ArrowRight') render(elapsed + 5); if (event.key === 'ArrowLeft') render(elapsed - 5); });
