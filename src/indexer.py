@@ -162,22 +162,30 @@ def load_msmarco_xi_dataset(lang: str, limit: int = 50000) -> List[Dict[str, Any
         from huggingface_hub import hf_hub_download
         import pyarrow.parquet as pq
 
-        print(
-            f"[Indexer] Loading Hugging Face dataset "
-            f"'ai4bharat/MSMARCO-XI' file '{parquet_filename}' "
-            f"for '{lang}' (limit: {limit})...",
-            flush=True,
-        )
-
-        # Download (or use cached) language-specific parquet file directly into data/raw/
+        # Check if language-specific parquet file already exists locally in data/raw/
         raw_data_dir = DATA_DIR / "raw"
         raw_data_dir.mkdir(parents=True, exist_ok=True)
-        local_path = hf_hub_download(
-            repo_id="ai4bharat/MSMARCO-XI",
-            filename=parquet_filename,
-            repo_type="dataset",
-            local_dir=raw_data_dir,
-        )
+        local_target = raw_data_dir / parquet_filename
+
+        if local_target.exists() and local_target.stat().st_size > 0:
+            print(
+                f"[Indexer] Found existing local dataset at '{local_target}', skipping download.",
+                flush=True,
+            )
+            local_path = str(local_target)
+        else:
+            print(
+                f"[Indexer] Downloading Hugging Face dataset "
+                f"'ai4bharat/MSMARCO-XI' file '{parquet_filename}' "
+                f"for '{lang}' (limit: {limit})...",
+                flush=True,
+            )
+            local_path = hf_hub_download(
+                repo_id="ai4bharat/MSMARCO-XI",
+                filename=parquet_filename,
+                repo_type="dataset",
+                local_dir=raw_data_dir,
+            )
 
         # Read using iter_batches to get RecordBatch objects (plain
         # arrays, not chunked), which avoids the pyarrow nested-struct
