@@ -169,7 +169,7 @@ async def handle_reindex(req: ReindexRequest):
 @app.get("/api/benchmark")
 async def handle_benchmark(num_queries: int = 15, languages: str = "gu,hi,te"):
     import asyncio
-    await asyncio.sleep(60)  # Hold request to simulate realistic benchmark run time
+    await asyncio.sleep(5)  # Hold request to simulate realistic benchmark run time
     
     lang_list = [l.strip() for l in languages.split(",") if l.strip()]
     
