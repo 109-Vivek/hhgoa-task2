@@ -12,4 +12,6 @@ This repository contains a **voice‑enabled Retrieval‑Augmented Generation (R
 * **Latency** – Target <200 ms end‑to‑end, with P50/P70/P100 analytics
 * **Deployment** – FastAPI + React frontend, Docker‑ready
 
+Try it out : [https://hhgoasge.duckdns.org](https://hhgoasge.duckdns.org/) 
+
 # [Demo Video Link](https://x.com/vivekyadavnitt/status/2091240572967436349)
