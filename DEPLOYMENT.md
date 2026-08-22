@@ -186,3 +186,13 @@ Add these 3 secrets:
   tmux ls
   ```
 
+* **Kill a specific tmux session** (stop the background indexing process):
+  ```bash
+  tmux kill-session -t indexing
+  ```
+
+* **Kill all tmux sessions & tmux server**:
+  ```bash
+  tmux kill-server
+  ```
+
